@@ -48,17 +48,38 @@ interface Entry<T, D> {
 
 /** The dependency injection container for `structured-injection`. */
 export class Container {
-    private _providers = new Map<TypeKey<any>, Entry<any, any>>()
+    private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>()
+    private readonly _parent?: Container
+
+    constructor(parent?: Container) {
+        this._parent = parent
+    }
 
     // Add a `TypeKey` provider to the _providers set
     private _setKeyProvider<T, D = {}>(key: TypeKey<T>, entry: Entry<T, D>) {
         this._providers.set(key, entry)
     }
 
+    private _getEntry<T, D>(key: TypeKey<T>): Entry<T, D> | undefined {
+        return this._providers.get(key) as Entry<T, D> | undefined
+    }
+
     // Returns a provider for the given `TypeKey`, or an error if it or any of its transitive dependencies are not provided.
     private _getTypeKeyProvider<T, D = any>(key: TypeKey<T>): (() => T) | DependencyFailedError | TypeKeyNotProvidedError {
-        const entry = this._providers.get(key) as Entry<T, D> | undefined
-        if (entry == undefined) return new TypeKeyNotProvidedError()
+        let entry: Entry<T, D>
+        let container: Container | undefined = this
+
+        // Traverse this container and its parents until we find an entry
+        while (true) {
+            const e = container?._getEntry<T, D>(key)
+            if (e != undefined) {
+                entry = e
+                break
+            }
+            container = container._parent
+            if (container == undefined) return new TypeKeyNotProvidedError()
+        }
+
         const value = entry.value
 
         // If this dependency is just an instance, return that
@@ -133,5 +154,28 @@ export class Container {
             throw provider
         }
         return provider()
+    }
+
+    /** Returns a child of this container, after executing `f` with it. */
+    createChild(f: (child: Container) => void): Container {
+        const child = new Container(this)
+        f(child)
+        return child
+    }
+
+    /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
+    createSubcomponent<Args extends any[]>(f: (child: Container, ...args: Args) => void): Container.Subcomponent<Args> {
+        return (...args) => {
+            const child = new Container(this)
+            f(child, ...args)
+            return child
+        }
+    }
+}
+
+export namespace Container {
+    /** A function that returns a new subcomponent instance using the given arguments. */
+    export interface Subcomponent<Args extends any[]> {
+        (...arg: Args): Container
     }
 }

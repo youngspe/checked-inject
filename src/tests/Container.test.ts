@@ -1,4 +1,4 @@
-import { Container, GetLazy, TypeKey } from "../lib";
+import { Container, GetLazy, TypeKey } from '../lib'
 
 const NumberKey = new TypeKey<number>()
 const StringKey = new TypeKey<string>()
@@ -114,5 +114,24 @@ describe(Container, () => {
 
         expect(out).toEqual(['10', 'foo', 'foo'])
         expect(sideEffect).toEqual(2)
+    })
+
+    test('child container defers to parent to get missing dependencies', () => {
+        const target = new Container()
+            .provideInstance(NumberKey, 10)
+            .provideInstance(BooleanKey, false)
+            .provide(ArrayKey, {
+                a: NumberKey,
+                b: { c: StringKey },
+                d: BooleanKey,
+            }, ({ a, b: { c }, d }) => [a.toString(), c, d.toString()])
+
+        const child = target.createChild(ct => ct
+            .provide(StringKey, {}, () => 'foo')
+            .provideInstance(BooleanKey, true)
+        )
+
+        const out = child.request(ArrayKey)
+        expect(out).toEqual(['10', 'foo', 'true'])
     })
 })
