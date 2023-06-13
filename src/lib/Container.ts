@@ -1,4 +1,4 @@
-import { AbstractKey, BaseKey, DependencyKey, TypeKey } from "."
+import { AbstractKey, BaseKey, DependencyKey, Scope, Singleton, TypeKey } from "."
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -36,23 +36,32 @@ export class InjectPropertyError extends InjectError {
     }
 }
 
+export class ScopeUnavailableError extends InjectError {
+    readonly scope: Scope
+    constructor(scope: Scope) {
+        const message = scope.name ? `Scope ${scope.name} unavailable` : 'Scope unavailable'
+        super(message)
+        this.scope = scope
+    }
+}
 
 interface Entry<T, D> {
     value:
     // This entry has a dependency key and an initializer function
-    | { deps: DependencyKey<D>, init: (deps: D) => T }
+    | { deps: DependencyKey<D>, init: (deps: D) => T, scope?: Scope }
     // This entry has a predefined instance we can return
     | { instance: T }
 }
-
 
 /** The dependency injection container for `structured-injection`. */
 export class Container {
     private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>()
     private readonly _parent?: Container
+    private readonly _scopes: Scope[]
 
-    constructor(parent?: Container) {
+    constructor({ scope = [Singleton], parent }: { scope?: Scope[] | Scope, parent?: Container } = {}) {
         this._parent = parent
+        this._scopes = scope instanceof Scope ? [scope] : scope
     }
 
     // Add a `TypeKey` provider to the _providers set
@@ -67,17 +76,17 @@ export class Container {
     // Returns a provider for the given `TypeKey`, or an error if it or any of its transitive dependencies are not provided.
     private _getTypeKeyProvider<T, D = any>(key: TypeKey<T>): (() => T) | DependencyFailedError | TypeKeyNotProvidedError {
         let entry: Entry<T, D>
-        let container: Container | undefined = this
 
         // Traverse this container and its parents until we find an entry
+        let entryContainer: Container | undefined = this
         while (true) {
-            const e = container?._getEntry<T, D>(key)
+            const e = entryContainer?._getEntry<T, D>(key)
             if (e != undefined) {
                 entry = e
                 break
             }
-            container = container._parent
-            if (container == undefined) return new TypeKeyNotProvidedError()
+            entryContainer = entryContainer._parent
+            if (entryContainer == undefined) return new TypeKeyNotProvidedError()
         }
 
         const value = entry.value
@@ -85,18 +94,48 @@ export class Container {
         // If this dependency is just an instance, return that
         if ('instance' in value) return () => value.instance
 
-        const depsResult: (() => D) | InjectError = this._getProvider(value.deps)
+        // Pick the appropriate container from this or its ancestors to retrieve the dependencies
+        // If this entry has no scope, use the current container. Otherwise, find a container that contains the scope
+        let scopeContainer: Container | undefined = this
+        if (value.scope != undefined) {
+            let shouldCreateEntry = true
+            while (!scopeContainer._scopes.includes(value.scope)) {
+                if (scopeContainer === entryContainer) {
+                    // if we've traversed back to the entryContainer and not found the scope,
+                    // that means the provider is defined in an descendant of the container with the scope,
+                    // if the scope exists at all
+                    shouldCreateEntry = false
+                }
+                scopeContainer = scopeContainer?._parent
+                if (scopeContainer == undefined) return new ScopeUnavailableError(value.scope)
+            }
+            if (shouldCreateEntry) {
+                // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
+                // don't store the instance in the ancestor.
+                // do this by creating a new Entry so changes to value don't affect the original entry.value
+                entry = { value }
+                scopeContainer._setKeyProvider(key, entry)
+            }
+        }
+
+        // Get the dependencies needed to intialize the requested value
+        const depsResult: (() => D) | InjectError = scopeContainer._getProvider(value.deps)
         if (depsResult instanceof InjectError) return new DependencyFailedError(depsResult)
         let deps: (() => D) | null = depsResult
 
         return () => {
-            const value = entry.value
             // Leave room for singletons in the future: between invocations, assume value could be changed to an instance
             // Assuming entry won't change from 'instance' to 'init', deps should be defined at this point
-            if ('init' in value) return value.init(deps!())
+            if ('init' in entry.value) {
+                const instance = entry.value.init(deps!())
+                // If there's no scope, just return the created instance
+                if (entry.value.scope == undefined) return instance
+                // If there is a scope, store the instance so we can return the same one every time
+                entry.value = { instance }
+            }
             // Since there's an instance available, we don't need deps anymore
             deps = null
-            return value.instance
+            return entry.value.instance
         }
     }
 
@@ -136,8 +175,12 @@ export class Container {
     }
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
-    provide<T, D>(key: TypeKey<T>, deps: DependencyKey<D>, init: (deps: D) => T): this {
-        this._setKeyProvider(key, { value: { deps, init: init } })
+    provide<T, D>(key: TypeKey<T>, ...args: [...scope: [scope: Scope] | [], deps: DependencyKey<D>, init: (deps: D) => T]): this {
+        const scope = args.length == 3 ? args[0] : undefined
+        const deps = args[args.length - 2] as DependencyKey<D>
+        const init = args[args.length - 1] as (deps: D) => T
+
+        this._setKeyProvider(key, { value: { deps, init, scope } })
         return this
     }
 
@@ -157,17 +200,23 @@ export class Container {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild(f: (child: Container) => void): Container {
-        const child = new Container(this)
-        f(child)
+    createChild(
+        { scope = [] }: Container.ChildOptions = {},
+        f?: (child: Container) => void,
+    ): Container {
+        const child = new Container({ scope, parent: this })
+        f?.(child)
         return child
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
-    createSubcomponent<Args extends any[]>(f: (child: Container, ...args: Args) => void): Container.Subcomponent<Args> {
+    createSubcomponent<Args extends any[]>(
+        { scope = [] }: Container.ChildOptions = {},
+        f?: (child: Container, ...args: Args) => void,
+    ): Container.Subcomponent<Args> {
         return (...args) => {
-            const child = new Container(this)
-            f(child, ...args)
+            const child = new Container({ scope, parent: this })
+            f?.(child, ...args)
             return child
         }
     }
@@ -177,5 +226,9 @@ export namespace Container {
     /** A function that returns a new subcomponent instance using the given arguments. */
     export interface Subcomponent<Args extends any[]> {
         (...arg: Args): Container
+    }
+
+    export interface ChildOptions {
+        scope?: Scope[] | Scope
     }
 }
