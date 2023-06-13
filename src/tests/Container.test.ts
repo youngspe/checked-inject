@@ -1,8 +1,9 @@
-import { Container, TypeKey } from "../lib";
+import { Container, GetLazy, TypeKey } from "../lib";
 
 const NumberKey = new TypeKey<number>()
 const StringKey = new TypeKey<string>()
 const ArrayKey = new TypeKey<string[]>()
+const BooleanKey = new TypeKey<boolean>()
 
 describe(Container, () => {
     test('provide and request', () => {
@@ -54,5 +55,64 @@ describe(Container, () => {
             .request(ArrayKey)
 
         expect(out).toEqual(['10', 'foo'])
+    })
+
+    test('request optional structured dependencies', () => {
+        const target = new Container()
+
+        const out = target
+            .provideInstance(NumberKey, 10)
+            .provide(StringKey, {}, () => 'foo')
+            .provide(ArrayKey, {}, () => ['a', 'b'])
+            .request({
+                a: NumberKey,
+                b: StringKey,
+                c: { d: ArrayKey, e: BooleanKey.Optional }
+            })
+
+        expect(out).toEqual({
+            a: 10,
+            b: 'foo',
+            c: { d: ['a', 'b'], e: undefined }
+        })
+    })
+
+    test('inject lazy structured dependencies', () => {
+        const target = new Container()
+
+        const out = target
+            .provideInstance(NumberKey, 10)
+            .provide(StringKey, {}, () => 'foo')
+            .provideInstance(BooleanKey, true)
+            .provide(ArrayKey, {
+                a: NumberKey.Lazy,
+                b: new GetLazy({ c: StringKey }),
+                c: BooleanKey,
+            }, ({ a, b }) => [a().toString(), b().c])
+            .request(ArrayKey)
+
+        expect(out).toEqual(['10', 'foo'])
+    })
+
+    test('inject structured provider dependencies', () => {
+        const target = new Container()
+        let sideEffect = 0
+
+        const out = target
+            .provideInstance(NumberKey, 10)
+            .provide(StringKey, {}, () => {
+                sideEffect += 1
+                return 'foo'
+            })
+            .provideInstance(BooleanKey, true)
+            .provide(ArrayKey, {
+                a: NumberKey,
+                b: { c: StringKey.Provider },
+                c: BooleanKey,
+            }, ({ a, b: { c } }) => [a.toString(), c(), c()])
+            .request(ArrayKey)
+
+        expect(out).toEqual(['10', 'foo', 'foo'])
+        expect(sideEffect).toEqual(2)
     })
 })
