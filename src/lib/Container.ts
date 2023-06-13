@@ -96,30 +96,43 @@ export class Container {
 
         // Pick the appropriate container from this or its ancestors to retrieve the dependencies
         // If this entry has no scope, use the current container. Otherwise, find a container that contains the scope
-        let scopeContainer: Container | undefined = this
+        let dependencyContainer: Container
         if (value.scope != undefined) {
-            let shouldCreateEntry = true
+            let scopeContainer: Container | undefined = this
+            let providerOutsideScope = true
             while (!scopeContainer._scopes.includes(value.scope)) {
                 if (scopeContainer === entryContainer) {
                     // if we've traversed back to the entryContainer and not found the scope,
                     // that means the provider is defined in an descendant of the container with the scope,
                     // if the scope exists at all
-                    shouldCreateEntry = false
+                    providerOutsideScope = false
                 }
                 scopeContainer = scopeContainer?._parent
                 if (scopeContainer == undefined) return new ScopeUnavailableError(value.scope)
             }
-            if (shouldCreateEntry) {
+            if (providerOutsideScope) {
                 // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
                 // don't store the instance in the ancestor.
                 // do this by creating a new Entry so changes to value don't affect the original entry.value
                 entry = { value }
                 scopeContainer._setKeyProvider(key, entry)
+                dependencyContainer = scopeContainer
+            } else {
+                // The provider was defined in a subcontainer of the scope.
+                // This means values available to entryContainer can't bleed into a parent container,
+                // so it's safe to use dependencies available to entryContainer but not scopeContainer.
+                // This allows you to, for example, provide types with Singleton scope in a non-root container
+                // and still have access to dependencies provided to that container.
+
+                // Basically we'll grab the the dependencies from the most recent of entryContainer and scopeContainer
+                dependencyContainer = entryContainer
             }
+        } else {
+            dependencyContainer = this
         }
 
         // Get the dependencies needed to intialize the requested value
-        const depsResult: (() => D) | InjectError = scopeContainer._getProvider(value.deps)
+        const depsResult: (() => D) | InjectError = dependencyContainer._getProvider(value.deps)
         if (depsResult instanceof InjectError) return new DependencyFailedError(depsResult)
         let deps: (() => D) | null = depsResult
 
