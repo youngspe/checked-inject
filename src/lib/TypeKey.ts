@@ -1,4 +1,4 @@
-import { InjectError } from "."
+import { InjectError, Scope, TypeKeyNotProvidedError } from "."
 
 /** An object representing a structured set of type keys to produce type `T`. */
 export type StructuredKey<out T> = { [K in keyof T]: DependencyKey<T[K]> }
@@ -10,8 +10,16 @@ export type Actual<D> = D extends DependencyKey<infer T> ? T : never
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _keySymbol: unique symbol = Symbol()
 
+type ClassLike<T> = (abstract new (...args: any[]) => T) | ((...args: any[]) => T)
+
+
 /** A key used to provide and request instances of type `T`. */
-export class TypeKey<out T> {
+export class TypeKey<out T = unknown, D = any> {
+    readonly name?: string
+    readonly class?: ClassLike<T>
+    readonly scope?: Scope
+    readonly defaultInit?: TypeKey.Options<T, D>['default']
+
     private readonly [_keySymbol]: T[] = []
     /** Requests a function returning a lazily-computed value of `T`. */
     readonly Lazy = new GetLazy<T>(this)
@@ -19,6 +27,25 @@ export class TypeKey<out T> {
     readonly Provider = new GetProvider<T>(this)
     /** Requests a value of type `T` if provided, otherwise `undefined`. */
     readonly Optional = new Optional<T>(this)
+
+    constructor(
+        { of, name = of?.name, scope, default: defaultInit }: TypeKey.Options<T, D> = {},
+    ) {
+        this.class = of
+        this.name = name
+        this.scope = scope
+        this.defaultInit = defaultInit
+    }
+}
+
+
+export namespace TypeKey {
+    export interface Options<T, D> {
+        name?: string,
+        of?: ClassLike<T>,
+        scope?: Scope,
+        default?: { deps: DependencyKey<D>, init: (deps: D) => T } | { instance: T } | (() => T)
+    }
 }
 
 /** Convenience for a TypeKey that specifically resolves to a a function that, given `Args`, returns `T`. */

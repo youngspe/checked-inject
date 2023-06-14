@@ -5,8 +5,10 @@ export abstract class InjectError extends Error { }
 
 /** Error thrown when requeting a TypeKey whose value was not provided. */
 export class TypeKeyNotProvidedError extends InjectError {
-    constructor() {
-        super('TypeKey not provided.')
+    readonly key: TypeKey
+    constructor(key: TypeKey) {
+        super(key.name ? `TypeKey ${key.name} not provided.` : 'TypeKey not provided.')
+        this.key = key
     }
 }
 
@@ -74,7 +76,7 @@ export class Container {
     }
 
     // Returns a provider for the given `TypeKey`, or an error if it or any of its transitive dependencies are not provided.
-    private _getTypeKeyProvider<T, D = any>(key: TypeKey<T>): (() => T) | DependencyFailedError | TypeKeyNotProvidedError {
+    private _getTypeKeyProvider<T, D = any>(key: TypeKey<T>): (() => T) | InjectError {
         let entry: Entry<T, D>
 
         // Traverse this container and its parents until we find an entry
@@ -86,7 +88,20 @@ export class Container {
                 break
             }
             entryContainer = entryContainer._parent
-            if (entryContainer == undefined) return new TypeKeyNotProvidedError()
+            if (entryContainer == undefined) {
+                const def = key.defaultInit
+                if (def != undefined) {
+                    const scope = key.scope
+                    // Use the default provider if available for this key
+                    entry = {
+                        value:
+                            (typeof def == 'function') ? { deps: {} as any, init: def, scope } :
+                                ('instance' in def) ? def : { scope, ...def }
+                    }
+                    break
+                }
+                return new TypeKeyNotProvidedError(key)
+            }
         }
 
         const value = entry.value
@@ -110,7 +125,7 @@ export class Container {
                 scopeContainer = scopeContainer?._parent
                 if (scopeContainer == undefined) return new ScopeUnavailableError(value.scope)
             }
-            if (providerOutsideScope) {
+            if (providerOutsideScope || entryContainer == undefined) {
                 // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
                 // don't store the instance in the ancestor.
                 // do this by creating a new Entry so changes to value don't affect the original entry.value
@@ -189,7 +204,8 @@ export class Container {
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     provide<T, D>(key: TypeKey<T>, ...args: [...scope: [scope: Scope] | [], deps: DependencyKey<D>, init: (deps: D) => T]): this {
-        const scope = args.length == 3 ? args[0] : undefined
+        // If no scope was provided, fall back to key.scope, which may or may not be defined
+        const scope = args.length == 3 ? args[0] : key.scope
         const deps = args[args.length - 2] as DependencyKey<D>
         const init = args[args.length - 1] as (deps: D) => T
 

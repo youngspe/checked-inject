@@ -194,4 +194,121 @@ describe(Container, () => {
         expect(parent.request(ArrayKey.Optional)).not.toBeDefined()
         expect(out2).not.toBe(out1)
     })
+
+    test('TypeKey.default is function', () => {
+        // Non-singleton
+        const CustomKey1 = new TypeKey({ default: () => ({ a: 1 }) })
+        // Singleton
+        const CustomKey2 = new TypeKey({ scope: Singleton, default: () => ({ b: 2 }) })
+        const target = new Container()
+
+        const out1a = target.request(CustomKey1)
+        const out1b = target.request(CustomKey1)
+
+        const out2a = target.request(CustomKey2)
+        const out2b = target.request(CustomKey2)
+
+        expect(out1a).toEqual({ a: 1 })
+        expect(out1b).toEqual({ a: 1 })
+        // Test that a new instance is created since this isn't a singleton:
+        expect(out1a).not.toBe(out1b)
+
+        expect(out2a).toEqual({ b: 2 })
+        expect(out2b).toEqual({ b: 2 })
+        // Test that a new instance isn't created since this is a singleton:
+        expect(out2a).toBe(out2b)
+    })
+
+    test('TypeKey.default is { deps, init } object', () => {
+        // Non-singleton
+        const CustomKey1 = new TypeKey({
+            default: {
+                deps: { num: NumberKey },
+                init: ({ num }) => ({ a: num }),
+            },
+        })
+        // Singleton
+        const CustomKey2 = new TypeKey({
+            scope: Singleton,
+            default: {
+                deps: { str: StringKey },
+                init: ({ str }) => ({ b: str }),
+            },
+        })
+
+        const target = new Container()
+            .provideInstance(NumberKey, 1)
+            .provideInstance(StringKey, 'foo')
+
+        const out1a = target.request(CustomKey1)
+        const out1b = target.request(CustomKey1)
+
+        const out2a = target.request(CustomKey2)
+        const out2b = target.request(CustomKey2)
+
+        expect(out1a).toEqual({ a: 1 })
+        expect(out1b).toEqual({ a: 1 })
+        // Test that a new instance is created since this isn't a singleton:
+        expect(out1a).not.toBe(out1b)
+
+        expect(out2a).toEqual({ b: 'foo' })
+        expect(out2b).toEqual({ b: 'foo' })
+        // Test that a new instance isn't created since this is a singleton:
+        expect(out2a).toBe(out2b)
+    })
+
+    test('TypeKey.default is instance', () => {
+        const instance = { a: 1 }
+        const CustomKey = new TypeKey({ default: { instance } })
+        const target = new Container()
+
+        const out = target.request(CustomKey)
+
+
+        expect(out).toBe(instance)
+    })
+
+    test('TypeKey.scope is respected when no scope is provided', () => {
+        const MyScope = new Scope()
+        const CustomKey = new TypeKey<{ a: number }>({ scope: MyScope })
+
+        const parent = new Container()
+            .provideInstance(NumberKey, 10)
+            .provide(CustomKey, { num: NumberKey }, ({ num }) => ({ a: num, }))
+
+        const child1 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 20)
+        const grandChild1 = child1.createChild({ scope: MyScope }).provideInstance(NumberKey, 30)
+
+        const out1 = child1.request(CustomKey)
+
+        const child2 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 40)
+        const grandChild2 = child2.createChild({ scope: MyScope }).provideInstance(NumberKey, 50)
+
+        const out2 = child2.request(CustomKey)
+
+        expect(parent.request(CustomKey.Optional)).toBeUndefined()
+        expect(out1).toEqual({ a: 20 })
+        expect(grandChild1.request(CustomKey)).toBe(out1)
+
+        expect(out2).toEqual({ a: 40 })
+        expect(grandChild2.request(CustomKey)).toBe(out2)
+    })
+
+    test('Provided scope overrides TypeKey.Scope', () => {
+        const MyScope = new Scope()
+        const CustomKey = new TypeKey<{ a: number }>({ scope: Singleton })
+
+        const parent = new Container()
+            .provideInstance(NumberKey, 10)
+            .provide(CustomKey, MyScope, { num: NumberKey }, ({ num }) => ({ a: num, }))
+
+        const child1 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 20)
+        const grandChild1 = child1.createChild({ scope: MyScope }).provideInstance(NumberKey, 30)
+
+        const out = child1.request(CustomKey)
+
+        expect(parent.request(CustomKey.Optional)).toBeUndefined()
+        expect(out).toEqual({ a: 20 })
+        expect(grandChild1.request(CustomKey)).toBe(out)
+    })
 })
