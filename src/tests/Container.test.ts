@@ -1,4 +1,4 @@
-import { Container, GetLazy, Scope, Singleton, TypeKey } from '../lib'
+import { Container, GetLazy, Module, Scope, Singleton, TypeKey } from '../lib'
 
 const NumberKey = new TypeKey<number>()
 const StringKey = new TypeKey<string>()
@@ -310,5 +310,42 @@ describe(Container, () => {
         expect(parent.request(CustomKey.Optional)).toBeUndefined()
         expect(out).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out)
+    })
+
+    test('apply a single functional module', () => {
+        const MyModule: Module = ct => ct
+            .provideInstance(NumberKey, 10)
+            .provideInstance(StringKey, 'foo')
+            .provide(ArrayKey, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
+
+        const target = new Container().apply(MyModule)
+
+        const out = target.request(ArrayKey)
+
+        expect(out).toEqual(['10', 'foo'])
+    })
+
+    test('apply compound modules', () => {
+        const NumericModule: Module = ct => ct
+            .provideInstance(NumberKey, 10)
+            .provideInstance(BooleanKey, true)
+
+        const StringModule: Module = ct => ct
+            .provideInstance(StringKey, 'foo')
+
+        const PrimitiveModule: Module = [NumericModule, StringModule]
+
+        const ArrayModule: Module = ct => ct
+            .provide(ArrayKey, {
+                num: NumberKey,
+                str: StringKey,
+                bool: BooleanKey,
+            }, ({ num, str, bool }) => [num.toString(), str, bool.toString()])
+
+        const target = new Container().apply(ArrayModule, PrimitiveModule)
+
+        const out = target.request(ArrayKey)
+
+        expect(out).toEqual(['10', 'foo', 'true'])
     })
 })

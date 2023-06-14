@@ -231,11 +231,9 @@ export class Container {
     /** Returns a child of this container, after executing `f` with it. */
     createChild(
         { scope = [] }: Container.ChildOptions = {},
-        f?: (child: Container) => void,
+        ...modules: Module[]
     ): Container {
-        const child = new Container({ scope, parent: this })
-        f?.(child)
-        return child
+        return new Container({ scope, parent: this }).apply(...modules)
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
@@ -249,6 +247,18 @@ export class Container {
             return child
         }
     }
+
+    /** Apply a list of `Module`s to this container. */
+    apply(...modules: Module[]): this {
+        for (let mod of modules) {
+            if (typeof mod == 'function') {
+                mod(this)
+            } else {
+                mod.forEach(m => this.apply(m))
+            }
+        }
+        return this
+    }
 }
 
 export namespace Container {
@@ -261,3 +271,11 @@ export namespace Container {
         scope?: Scope[] | Scope
     }
 }
+
+/** Implementation of a module that performs operations on a given `Container`. */
+export interface FunctionModule {
+    (ct: Container): void
+}
+
+/** An object used to provide definitions to a `Container` */
+export type Module = FunctionModule | Module[]
