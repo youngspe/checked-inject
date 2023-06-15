@@ -1,4 +1,4 @@
-import { AbstractKey, BaseKey, DependencyKey, Scope, Singleton, TypeKey } from "."
+import { AbstractKey, BaseKey, DependencyKey, Inject, InjectableClass, Scope, Singleton, TypeKey } from "."
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -54,6 +54,8 @@ interface Entry<T, D> {
     // This entry has a predefined instance we can return
     | { instance: T }
 }
+
+const _classTypeKey = Symbol()
 
 /** The dependency injection container for `structured-injection`. */
 export class Container {
@@ -167,11 +169,40 @@ export class Container {
         }
     }
 
+    private _getClassProvider<T>(cls: InjectableClass<T>): (() => T) | InjectError {
+        const _cls: typeof cls & { [_classTypeKey]?: TypeKey<T> } = cls
+        if (!_cls[_classTypeKey] || !Object.getOwnPropertySymbols(_cls).includes(_classTypeKey)) {
+            if (Inject.binding in _cls) {
+                const binding =
+                    typeof _cls[Inject.binding] == 'function' ? _cls[Inject.binding]() : _cls[Inject.binding]
+
+                _cls[_classTypeKey] = new TypeKey({
+                    of: _cls,
+                    scope: _cls[Inject.scope],
+                    default: {
+                        deps: binding.dependencies,
+                        init: deps => binding.resolve(deps)
+                    },
+                })
+            } else {
+                (_cls as any)[_classTypeKey] = new TypeKey({
+                    of: _cls,
+                    scope: _cls[Inject.scope],
+                    default: () => new _cls(),
+                })
+            }
+        }
+
+        const typeKey = _cls[_classTypeKey] as TypeKey<T>
+        return this._getTypeKeyProvider(typeKey)
+    }
+
     // Returns a provider for the given `DependencyKey`, or an error if any of its transitive dependencies are not provided.
     private _getProvider<T>(deps: DependencyKey<T>): (() => T) | InjectError {
         if (deps instanceof TypeKey) return this._getTypeKeyProvider(deps)
         if (deps instanceof BaseKey) return deps.init(this._getProvider(deps.inner))
         if (deps instanceof AbstractKey) throw new Error('Unreachable: all subtypes of AbstractKey also extend BaseKey')
+        if (typeof deps == 'function') return this._getClassProvider(deps)
         const arrayLength = deps instanceof Array ? deps.length : null
 
         const providers: { [K in keyof T]?: () => T[K] } = {}

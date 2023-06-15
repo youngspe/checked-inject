@@ -1,4 +1,4 @@
-import { Container, GetLazy, Module, Scope, Singleton, TypeKey } from '../lib'
+import { Container, GetLazy, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
 
 const NumberKey = new TypeKey<number>()
 const StringKey = new TypeKey<string>()
@@ -347,5 +347,44 @@ describe(Container, () => {
         const out = target.request(ArrayKey)
 
         expect(out).toEqual(['10', 'foo', 'true'])
+    })
+
+    test('resolve from InjectableClass', () => {
+        abstract class MyClass1 {
+            abstract num: number
+            static [Inject.binding]: Inject.Binding<MyClass1> = () => Inject.bindFrom(MyClass2)
+        }
+
+        class MyClass2 extends MyClass1 {
+            override num: number
+            str: string
+
+            constructor(num: number, str: string) {
+                super()
+                this.num = num
+                this.str = str
+            }
+
+            static [Inject.binding] = Inject.bindConstructor(this, NumberKey, StringKey)
+        }
+        class MyClass3 extends MyClass2 {
+            bool = true
+            constructor() {
+                super(10, 'foo')
+            }
+
+            static [Inject.binding] = Inject.bindConstructor(this)
+        }
+
+        const target = new Container()
+            .provideInstance(NumberKey, 20)
+            .provideInstance(StringKey, 'bar')
+
+        expect(target.request(MyClass1)).toEqual(new MyClass2(20, 'bar'))
+        expect(target.request(MyClass2)).toEqual(new MyClass2(20, 'bar'))
+        expect(target.request(MyClass3)).toEqual(new MyClass3())
+
+        const arr: number[] = target.request(Array<number>)
+        expect(arr).toEqual([])
     })
 })
