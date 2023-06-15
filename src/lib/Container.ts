@@ -290,6 +290,11 @@ export class Container {
         }
         return this
     }
+
+    /** Calls the given function with the requested dependencies and returns its output. */
+    inject<D, R>(deps: DependencyKey<D>, f: (deps: D) => R): R {
+        return f(this.request(deps))
+    }
 }
 
 export namespace Container {
