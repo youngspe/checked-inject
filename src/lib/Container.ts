@@ -1,4 +1,4 @@
-import { AbstractKey, BaseKey, DependencyKey, Inject, InjectableClass, Scope, Singleton, TypeKey } from "."
+import { AbstractKey, BaseKey, DependencyKey, Inject, InjectableClass, Scope, Singleton, StructuredKey, TypeKey } from "."
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -59,7 +59,9 @@ const _classTypeKey = Symbol()
 
 /** The dependency injection container for `structured-injection`. */
 export class Container {
-    private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>()
+    private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>([
+        [Container.Key, { value: { instance: this } }]
+    ])
     private readonly _parent?: Container
     private readonly _scopes: Scope[]
 
@@ -210,8 +212,11 @@ export class Container {
         let failed = false
         const errors: { [K in keyof T]?: InjectError } = {}
 
-        for (let prop in deps) {
-            const provider = this._getProvider(deps[prop])
+        // Cast this to StructuredKey<T> to discard the [k: keyof any] signature
+        let _deps: StructuredKey<T> = deps
+
+        for (let prop in _deps) {
+            const provider = this._getProvider(_deps[prop])
             if (provider instanceof InjectError) {
                 failed = true
                 errors[prop] = provider
@@ -295,6 +300,9 @@ export class Container {
     inject<D, R>(deps: DependencyKey<D>, f: (deps: D) => R): R {
         return f(this.request(deps))
     }
+
+    static readonly Key = new TypeKey({ of: Container })
+    static readonly [Inject.binding] = Inject.bindFrom(Container.Key)
 }
 
 export namespace Container {

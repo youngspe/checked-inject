@@ -82,7 +82,7 @@ export namespace Inject {
         }
     }
 
-    export function bindWith<T, D>(deps: D, init: (deps: D) => T): _Binding<T> {
+    export function bindWith<T, D>(deps: DependencyKey<D>, init: (deps: D) => T): _Binding<T> {
         return new BindWith(deps, init)
     }
 

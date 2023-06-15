@@ -1,9 +1,11 @@
 import { InjectError, InjectableClass, Scope } from "."
 
+type OnlyObject = { [k: keyof any]: unknown } | unknown[]
+
 /** An object representing a structured set of type keys to produce type `T`. */
 export type StructuredKey<out T> = { readonly [K in keyof T]: DependencyKey<T[K]> }
 /** A dependency key that, when requested, resolves to a value of type `T`. */
-export type DependencyKey<T> = TypeKey<T> | AbstractKey<T> | StructuredKey<T> | InjectableClass<T>
+export type DependencyKey<T> = TypeKey<T> | AbstractKey<T> | (OnlyObject & StructuredKey<T>) | InjectableClass<T>
 /** The actual type that a dependency key of type `D` resolves to. */
 export type Actual<D> = D extends DependencyKey<infer T> ? T : never
 
