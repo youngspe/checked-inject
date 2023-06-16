@@ -1,4 +1,6 @@
-import { AbstractKey, BaseKey, DependencyKey, Inject, InjectableClass, Scope, Singleton, StructuredKey, TypeKey } from "."
+import { AbstractKey, BaseKey, DependencyKey, InjectableClass, Scope, Singleton, StructuredKey } from "."
+import { Inject } from "./Inject"
+import { TypeKey } from "./TypeKey"
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -299,6 +301,11 @@ export class Container {
     /** Calls the given function with the requested dependencies and returns its output. */
     inject<D, R>(deps: DependencyKey<D>, f: (deps: D) => R): R {
         return f(this.request(deps))
+    }
+
+    /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
+    build<A extends any[], T>(deps: DependencyKey<(...args: A) => T>, ...args: A): T {
+        return this.request(deps)(...args)
     }
 
     static readonly Key = new TypeKey({ of: Container })

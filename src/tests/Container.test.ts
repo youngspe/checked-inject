@@ -1,4 +1,4 @@
-import { Container, GetLazy, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
+import { Container, GetLazy, Inject, Module, Scope, Singleton, SubcomponentKey, TypeKey } from '../lib'
 
 const NumberKey = new TypeKey<number>()
 const StringKey = new TypeKey<string>()
@@ -386,5 +386,27 @@ describe(Container, () => {
 
         const arr: number[] = target.request(Array<number>)
         expect(arr).toEqual([])
+    })
+
+    test('SubcomponentKey', () => {
+        const UserScope = new Scope()
+        const Keys = new class {
+            UserId = new TypeKey<string>()
+            UserName = new TypeKey<string>()
+            UserInfo = new TypeKey<{ userName: string, userId: string }>()
+            SubComponent = new SubcomponentKey({ scope: UserScope }, (ct, userName: string, userId: string) => ct
+                .provideInstance(this.UserName, userName)
+                .provideInstance(this.UserId, userId)
+            )
+        }()
+
+        const target = new Container()
+            .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
+
+        const sub1 = target.build(Keys.SubComponent, 'alice', '123')
+        const sub2 = target.build(Keys.SubComponent, 'bob', '456')
+
+        expect(sub1.request(Keys.UserInfo)).toEqual({ userName: 'alice', userId: '123' })
+        expect(sub2.request(Keys.UserInfo)).toEqual({ userName: 'bob', userId: '456' })
     })
 })
