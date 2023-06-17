@@ -7,7 +7,7 @@ const BooleanKey = new TypeKey<boolean>()
 
 describe(Container, () => {
     test('provide and request', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target.provide(NumberKey, {}, () => 10).request(NumberKey);
 
@@ -15,7 +15,7 @@ describe(Container, () => {
     })
 
     test('provideInstance and request', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target.provideInstance(NumberKey, 10).request(NumberKey)
 
@@ -23,7 +23,7 @@ describe(Container, () => {
     })
 
     test('request structured dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target
             .provideInstance(NumberKey, 10)
@@ -43,7 +43,7 @@ describe(Container, () => {
     })
 
     test('inject structured dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target
             .provideInstance(NumberKey, 10)
@@ -58,7 +58,7 @@ describe(Container, () => {
     })
 
     test('request optional structured dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target
             .provideInstance(NumberKey, 10)
@@ -78,7 +78,7 @@ describe(Container, () => {
     })
 
     test('inject lazy structured dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
 
         const out = target
             .provideInstance(NumberKey, 10)
@@ -95,7 +95,7 @@ describe(Container, () => {
     })
 
     test('inject structured provider dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
         let sideEffect = 0
 
         const out = target
@@ -117,7 +117,7 @@ describe(Container, () => {
     })
 
     test('child container defers to parent to get missing dependencies', () => {
-        const target = new Container()
+        const target = Container.create()
             .provideInstance(NumberKey, 10)
             .provideInstance(BooleanKey, false)
             .provide(ArrayKey, {
@@ -136,7 +136,7 @@ describe(Container, () => {
     })
 
     test('singleton returns the same instance every time', () => {
-        const target = new Container()
+        const target = Container.create()
         const CustomKey = new TypeKey<{ num: number, str: string, bool: boolean }>()
 
         target
@@ -166,7 +166,7 @@ describe(Container, () => {
     test('dependencies are resolved from the appropriate scope', () => {
         const MyScope = new Scope()
 
-        const parent = new Container()
+        const parent = Container.create()
             .provide(NumberKey, {}, () => 10)
             .provide(StringKey, {}, () => 'foo')
             .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
@@ -200,7 +200,7 @@ describe(Container, () => {
         const CustomKey1 = new TypeKey({ default: () => ({ a: 1 }) })
         // Singleton
         const CustomKey2 = new TypeKey({ scope: Singleton, default: () => ({ b: 2 }) })
-        const target = new Container()
+        const target = Container.create()
 
         const out1a = target.request(CustomKey1)
         const out1b = target.request(CustomKey1)
@@ -236,7 +236,7 @@ describe(Container, () => {
             },
         })
 
-        const target = new Container()
+        const target = Container.create()
             .provideInstance(NumberKey, 1)
             .provideInstance(StringKey, 'foo')
 
@@ -260,7 +260,7 @@ describe(Container, () => {
     test('TypeKey.default is instance', () => {
         const instance = { a: 1 }
         const CustomKey = new TypeKey({ default: { instance } })
-        const target = new Container()
+        const target = Container.create()
 
         const out = target.request(CustomKey)
 
@@ -272,7 +272,7 @@ describe(Container, () => {
         const MyScope = new Scope()
         const CustomKey = new TypeKey<{ a: number }>({ scope: MyScope })
 
-        const parent = new Container()
+        const parent = Container.create()
             .provideInstance(NumberKey, 10)
             .provide(CustomKey, { num: NumberKey }, ({ num }) => ({ a: num, }))
 
@@ -298,7 +298,7 @@ describe(Container, () => {
         const MyScope = new Scope()
         const CustomKey = new TypeKey<{ a: number }>({ scope: Singleton })
 
-        const parent = new Container()
+        const parent = Container.create()
             .provideInstance(NumberKey, 10)
             .provide(CustomKey, MyScope, { num: NumberKey }, ({ num }) => ({ a: num, }))
 
@@ -318,7 +318,7 @@ describe(Container, () => {
             .provideInstance(StringKey, 'foo')
             .provide(ArrayKey, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
 
-        const target = new Container().apply(MyModule)
+        const target = Container.create().apply(MyModule)
 
         const out = target.request(ArrayKey)
 
@@ -342,7 +342,7 @@ describe(Container, () => {
                 bool: BooleanKey,
             }, ({ num, str, bool }) => [num.toString(), str, bool.toString()])
 
-        const target = new Container().apply(ArrayModule, PrimitiveModule)
+        const target = Container.create().apply(ArrayModule, PrimitiveModule)
 
         const out = target.request(ArrayKey)
 
@@ -376,7 +376,7 @@ describe(Container, () => {
             static [Inject.binding] = Inject.bindConstructor(this)
         }
 
-        const target = new Container()
+        const target = Container.create()
             .provideInstance(NumberKey, 20)
             .provideInstance(StringKey, 'bar')
 
@@ -400,7 +400,7 @@ describe(Container, () => {
             )
         }()
 
-        const target = new Container()
+        const target = Container.create()
             .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
 
         const sub1 = target.build(Keys.SubComponent, 'alice', '123')

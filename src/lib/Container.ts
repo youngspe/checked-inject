@@ -1,4 +1,4 @@
-import { AbstractKey, BaseKey, DependencyKey, InjectableClass, Scope, Singleton, StructuredKey } from "."
+import { AbstractKey, BaseKey, DependencyKey, InjectableClass, Scope, Singleton, StructuredKey, scopeTag } from "."
 import { Inject } from "./Inject"
 import { TypeKey } from "./TypeKey"
 
@@ -60,16 +60,22 @@ interface Entry<T, D> {
 const _classTypeKey = Symbol()
 
 /** The dependency injection container for `structured-injection`. */
-export class Container {
+export class Container<out S extends Scope = Scope> {
     private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
     private readonly _parent?: Container
-    private readonly _scopes: Scope[]
+    readonly scopes: S[]
 
-    constructor({ scope = [Singleton], parent }: { scope?: Scope[] | Scope, parent?: Container } = {}) {
+    protected constructor({ scope = [], parent }: { scope?: S[] | S, parent?: Container } = {}) {
         this._parent = parent
-        this._scopes = scope instanceof Scope ? [scope] : scope
+        this.scopes = scope instanceof Array ? scope : [scope]
+    }
+
+    static create<S extends Scope = never>(options: { scope?: S[] | S } = {}): Container<S | typeof Singleton> {
+        let { scope = Singleton } = options
+        let scopeWithSingleton = scope instanceof Array ? [Singleton, ...scope] : [Singleton, scope]
+        return new Container({ scope: scopeWithSingleton })
     }
 
     // Add a `TypeKey` provider to the _providers set
@@ -121,7 +127,7 @@ export class Container {
         if (value.scope != undefined) {
             let scopeContainer: Container | undefined = this
             let providerOutsideScope = true
-            while (!scopeContainer._scopes.includes(value.scope)) {
+            while (!scopeContainer.scopes.includes(value.scope)) {
                 if (scopeContainer === entryContainer) {
                     // if we've traversed back to the entryContainer and not found the scope,
                     // that means the provider is defined in an descendant of the container with the scope,
@@ -267,18 +273,18 @@ export class Container {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild(
-        { scope = [] }: Container.ChildOptions = {},
+    createChild<S2 extends Scope = never>(
+        { scope = [] }: Container.ChildOptions<S2> = {},
         ...modules: Module[]
-    ): Container {
-        return new Container({ scope, parent: this }).apply(...modules)
+    ): Container<S | S2> {
+        return new Container<S | S2>({ scope, parent: this }).apply(...modules)
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
-    createSubcomponent<Args extends any[]>(
-        { scope = [] }: Container.ChildOptions = {},
+    createSubcomponent<Args extends any[], S2 extends Scope = never>(
+        { scope = [] }: Container.ChildOptions<S2> = {},
         f?: (child: Container, ...args: Args) => void,
-    ): Container.Subcomponent<Args> {
+    ): Container.Subcomponent<Args, S | S2> {
         return (...args) => {
             const child = new Container({ scope, parent: this })
             f?.(child, ...args)
@@ -308,18 +314,18 @@ export class Container {
         return this.request(deps)(...args)
     }
 
-    static readonly Key = new TypeKey({ of: Container })
+    static readonly Key: TypeKey<Container> = new TypeKey({ of: Container })
     static readonly [Inject.binding] = Inject.bindFrom(Container.Key)
 }
 
 export namespace Container {
     /** A function that returns a new subcomponent instance using the given arguments. */
-    export interface Subcomponent<Args extends any[]> {
-        (...arg: Args): Container
+    export interface Subcomponent<Args extends any[], S extends Scope = Scope> {
+        (...arg: Args): Container<S>
     }
 
-    export interface ChildOptions {
-        scope?: Scope[] | Scope
+    export interface ChildOptions<S extends Scope = Scope> {
+        scope?: S[] | S
     }
 }
 

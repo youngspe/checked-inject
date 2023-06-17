@@ -1,4 +1,5 @@
-import { Container, InjectError, InjectableClass, Scope } from "."
+import { Container, InjectError, InjectableClass, Scope, Singleton } from "."
+import { Class } from "./_internal"
 
 type OnlyObject = { [k: keyof any]: unknown } | unknown[]
 
@@ -7,7 +8,16 @@ export type StructuredKey<out T> = { readonly [K in keyof T]: DependencyKey<T[K]
 /** A dependency key that, when requested, resolves to a value of type `T`. */
 export type DependencyKey<T> = TypeKey<T> | AbstractKey<T> | (OnlyObject & StructuredKey<T>) | InjectableClass<T>
 /** The actual type that a dependency key of type `D` resolves to. */
-export type Actual<D> = D extends DependencyKey<infer T> ? T : never
+
+
+type KeysWhere<D, E> = { [P in keyof D]: D[P] extends E ? { [_ in P]: D[P] } : never }[keyof D]
+
+export type Actual<D, S extends Scope = Scope> =
+    & (D extends DependencyKey<infer T> ? T : unknown)
+    & (D extends OnlyObject ? { [K in keyof KeysWhere<D, OnlyObject>]: Actual<D> } : unknown)
+    & (D extends SubcomponentKey<infer A, infer S2> ? Container.Subcomponent<A, S | S2> : unknown)
+
+type A = Actual<SubcomponentKey<[1, 2], typeof Singleton>, Scope>
 
 // Use this to prevent library consumers from generating types equivalent to `AbstractKey`.
 const _abstractKeySymbol: unique symbol = Symbol()
@@ -40,8 +50,8 @@ export abstract class AbstractKey<out T> {
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _keySymbol: unique symbol = Symbol()
 
-type ClassLike<T> = (abstract new (...args: any[]) => T) | ((...args: any[]) => T)
 
+type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
 /** A key used to provide and request instances of type `T`. */
 export class TypeKey<out T = unknown, D = any> extends AbstractKey<T> {
@@ -76,8 +86,8 @@ export namespace TypeKey {
 /** Convenience for a TypeKey that specifically resolves to a a function that, given `Args`, returns `T`. */
 export class FactoryKey<Args extends any[], T, D = any> extends TypeKey<(...args: Args) => T, D> { }
 
-export class SubcomponentKey<in Args extends any[]> extends TypeKey<Container.Subcomponent<Args>, Container> {
-    constructor(options: Container.ChildOptions, f: (ct: Container, ...args: Args) => void) {
+export class SubcomponentKey<in Args extends any[], S extends Scope = never> extends TypeKey<Container.Subcomponent<Args>, Container> {
+    constructor(options: Container.ChildOptions<S>, f: (ct: Container, ...args: Args) => void) {
         super({ default: { deps: Container, init: ct => ct.createSubcomponent(options, f) } })
     }
 }
