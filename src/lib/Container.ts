@@ -59,6 +59,10 @@ interface Entry<T, D> {
 
 const _classTypeKey = Symbol()
 
+type CanRequest<Ct, K, A> = (() => Ct) extends () => _Container<infer P> ? (
+    OutstandingDeps<P, K> extends never ? A : never
+) : never
+
 type Keys<Deps> = Deps extends [infer K, infer _D] ? K : never
 
 type Provide<Old, New> = Old extends [Keys<New>, infer _D] ? New : Old
@@ -66,14 +70,24 @@ type Provide<Old, New> = Old extends [Keys<New>, infer _D] ? New : Old
 export type DepsOf<D> =
     D extends TypeKey<infer _T> ? D :
     D extends BaseKey<infer _T, infer K, infer _D> ? DepsOf<K> :
-    D extends { [s: keyof any]: unknown } ? { [K in keyof D]: DepsOf<D[K]> }[keyof D] :
     // TODO: refactor ClassWithBinding to include dependencies as a type arg
-    D extends [] ? never :
-    D extends (infer A)[] ? DepsOf<A> :
-    D extends [infer A, ...infer B] ? DepsOf<A> | DepsOf<B> :
     D extends ClassWithBinding<infer _T, infer Deps> ? Deps :
     D extends DefaultConstructor<infer _T> ? never :
+    D extends [infer A, ...infer B] ? DepsOf<A> | DepsOf<B> :
+    D extends [] ? never :
+    D extends (infer A)[] ? DepsOf<A> :
+    D extends { [s: keyof any]: unknown } ? { [K in keyof D]: DepsOf<D[K]> }[keyof D] :
     D
+
+type OutstandingDeps<Deps, K, Deps2 = Deps> = K extends Keys<Deps> ? (
+    Deps extends [K, infer D] ? OutstandingDeps<Exclude<Deps2, [K, any]>, D> : never
+) : K
+
+const _depsTag = Symbol()
+
+interface _Container<P> {
+    [_depsTag]?: P extends any ? (d: P) => void : never
+}
 
 /** The dependency injection container for `structured-injection`. */
 export class Container<in P> {
@@ -82,7 +96,7 @@ export class Container<in P> {
         // [Container.Key, { value: { instance: this } }]
     ])
     private readonly _parent?: Container<[any, never]>
-    private readonly _deps!: (P extends any ? (d: P) => void : never) | undefined
+    private readonly [_depsTag]?: P extends any ? () => (d: P) => void : never
     private readonly scopes: readonly Scope[]
 
     protected constructor({ scope = [], parent }: { scope?: Scope[] | Scope, parent?: Container<any> } = {}) {
@@ -297,7 +311,7 @@ export class Container<in P> {
     }
 
     /** Requests the dependency or dependencies defined by `deps`, or throws if any transitive dependencies are not provided. */
-    request<T>(deps: DependencyKey<T>): T {
+    request<K extends DependencyKey>(deps: K, ..._: CanRequest<this, K, []>): Actual<K> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
             throw provider
@@ -338,13 +352,20 @@ export class Container<in P> {
     }
 
     /** Calls the given function with the requested dependencies and returns its output. */
-    inject<D, R>(deps: DependencyKey<D>, f: (deps: D) => R): R {
-        return f(this.request(deps))
+    inject<D, R, K extends DependencyKey<D>>(
+        deps: K,
+        f: (deps: D) => R,
+        ..._: CanRequest<this, K, []>
+    ): R {
+        return f(this.request(deps, ..._ as any))
     }
 
     /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
-    build<A extends any[], T>(deps: DependencyKey<(...args: A) => T>, ...args: A): T {
-        return this.request(deps)(...args)
+    build<A extends any[], T, K extends DependencyKey<(...args: A) => T>>(
+        deps: K,
+        ...args: CanRequest<this, K, A>
+    ): T {
+        return this.request<K>(deps, ...([] as any))(...args)
     }
 
     // TODO: be able to provide a container with known types ??
