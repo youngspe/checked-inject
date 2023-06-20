@@ -8,17 +8,17 @@ class BooleanKey extends TypeKey<boolean>() { static readonly [keyTag] = Symbol(
 
 describe(Container, () => {
     test('provide and request', () => {
-        const target = Container.create()
+        const target = Container.create().provide(NumberKey, {}, () => 10)
 
-        const out = target.provide(NumberKey, {}, () => 10).request(NumberKey);
+        const out = target.request(NumberKey);
 
         expect(out).toEqual(10)
     })
 
     test('provideInstance and request', () => {
-        const target = Container.create()
+        const target = Container.create().provideInstance(NumberKey, 10)
 
-        const out = target.provideInstance(NumberKey, 10).request(NumberKey)
+        const out = target.request(NumberKey)
 
         expect(out).toEqual(10)
     })
@@ -127,10 +127,10 @@ describe(Container, () => {
                 d: BooleanKey,
             }, ({ a, b: { c }, d }) => [a.toString(), c, d.toString()])
 
-        const child = target.createChild({}, ct => ct
+        const child = target
+            .createChild()
             .provide(StringKey, {}, () => 'foo')
             .provideInstance(BooleanKey, true)
-        )
 
         const out = child.request(ArrayKey)
         expect(out).toEqual(['10', 'foo', 'true'])
@@ -172,9 +172,9 @@ describe(Container, () => {
             .provide(StringKey, {}, () => 'foo')
             .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
 
-        const child1 = parent.createChild({ scope: MyScope }, ct => ct.provide(NumberKey, {}, () => 20))
-        const grandChild1a = child1.createChild({}, ct => ct.provide(StringKey, {}, () => 'bar'))
-        const grandChild1b = child1.createChild({}, ct => ct.provide(NumberKey, {}, () => 30))
+        const child1 = parent.createChild({ scope: MyScope }).provide(NumberKey, {}, () => 20)
+        const grandChild1a = child1.createChild().provide(StringKey, {}, () => 'bar')
+        const grandChild1b = child1.createChild().provide(NumberKey, {}, () => 30)
 
         const out1 = child1.request(ArrayKey)
 
@@ -182,9 +182,9 @@ describe(Container, () => {
         expect(grandChild1a.request(ArrayKey)).toBe(out1)
         expect(grandChild1b.request(ArrayKey)).toBe(out1)
 
-        const child2 = parent.createChild({ scope: MyScope }, ct => ct.provide(NumberKey, {}, () => 40))
-        const grandChild2a = child2.createChild({}, ct => ct.provide(StringKey, {}, () => 'baz'))
-        const grandChild2b = child2.createChild({}, ct => ct.provide(NumberKey, {}, () => 50))
+        const child2 = parent.createChild({ scope: MyScope }).provide(NumberKey, {}, () => 40)
+        const grandChild2a = child2.createChild().provide(StringKey, {}, () => 'baz')
+        const grandChild2b = child2.createChild().provide(NumberKey, {}, () => 50)
 
         const out2 = grandChild2a.request(ArrayKey)
 
@@ -314,10 +314,11 @@ describe(Container, () => {
     })
 
     test('apply a single functional module', () => {
-        const MyModule: Module = ct => ct
+        const MyModule = Module(ct => ct
             .provideInstance(NumberKey, 10)
             .provideInstance(StringKey, 'foo')
             .provide(ArrayKey, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
+        )
 
         const target = Container.create().apply(MyModule)
 
@@ -327,21 +328,24 @@ describe(Container, () => {
     })
 
     test('apply compound modules', () => {
-        const NumericModule: Module = ct => ct
+        const NumericModule = Module(ct => ct
             .provideInstance(NumberKey, 10)
             .provideInstance(BooleanKey, true)
+        )
 
-        const StringModule: Module = ct => ct
+        const StringModule = Module(ct => ct
             .provideInstance(StringKey, 'foo')
+        )
 
-        const PrimitiveModule: Module = [NumericModule, StringModule]
+        const PrimitiveModule = Module(NumericModule, StringModule)
 
-        const ArrayModule: Module = ct => ct
+        const ArrayModule = Module(ct => ct
             .provide(ArrayKey, {
                 num: NumberKey,
                 str: StringKey,
                 bool: BooleanKey,
             }, ({ num, str, bool }) => [num.toString(), str, bool.toString()])
+        )
 
         const target = Container.create().apply(ArrayModule, PrimitiveModule)
 

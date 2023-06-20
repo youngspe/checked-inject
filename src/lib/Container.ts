@@ -65,7 +65,9 @@ type CanRequest<Ct, K, A> = (() => Ct) extends () => _Container<infer P> ? (
 
 type Keys<Deps> = Deps extends [infer K, infer _D] ? K : never
 
-type Provide<Old, New> = Old extends [Keys<New>, infer _D] ? New : Old
+type Provide<Old, New> =
+    | (New extends [infer K, infer _D] ? Old extends [K, infer _D] ? never : Old : never)
+    | New
 
 export type DepsOf<D> =
     D extends TypeKey<infer _T> ? D :
@@ -85,18 +87,18 @@ type OutstandingDeps<Deps, K, Deps2 = Deps> = K extends Keys<Deps> ? (
 
 const _depsTag = Symbol()
 
-interface _Container<P> {
-    [_depsTag]?: P extends any ? (d: P) => void : never
+interface _Container<in P> {
+    [_depsTag]?: (d: P) => void
 }
 
 /** The dependency injection container for `structured-injection`. */
-export class Container<in P> {
+export class Container<P> {
     private readonly _providers = new Map<TypeKey<any>, Entry<any, any>>([
         // TODO: be able to provide this container
         // [Container.Key, { value: { instance: this } }]
     ])
     private readonly _parent?: Container<[any, never]>
-    private readonly [_depsTag]?: P extends any ? () => (d: P) => void : never
+    readonly [_depsTag]?: (d: P) => void
     private readonly scopes: readonly Scope[]
 
     protected constructor({ scope = [], parent }: { scope?: Scope[] | Scope, parent?: Container<any> } = {}) {
@@ -104,7 +106,9 @@ export class Container<in P> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: S[] | S } = {}): Container<S | typeof Singleton> {
+    static create<S extends Scope = never>(options: { scope?: S[] | S } = {}): Container<
+        (S extends any ? [S, never] : never) | [Singleton, never]
+    > {
         let { scope = Singleton } = options
         let scopeWithSingleton = scope instanceof Array ? [Singleton, ...scope] : [Singleton, scope]
         return new Container({ scope: scopeWithSingleton })
@@ -289,11 +293,11 @@ export class Container<in P> {
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     provide<
-        T, K extends TypeKey<T>, D,
+        T, K extends TypeKey<T>, D extends DependencyKey,
         S extends Scope = K['scope'] extends infer A extends Scope ? A : never
     >(
         key: K,
-        ...args: [...scope: [scope: S] | [], deps: DependencyKey<D>, init: (deps: D) => T]
+        ...args: [...scope: [scope: S] | [], deps: D, init: (deps: Actual<D, P>) => T]
     ): Container<Provide<P, [K, S | DepsOf<D>]>> {
         // If no scope was provided, fall back to key.scope, which may or may not be defined
         const scope = args.length == 3 ? args[0] : key.scope
@@ -305,13 +309,13 @@ export class Container<in P> {
     }
 
     /** Registers 'key' to provide the given `instance`. */
-    provideInstance<T, K extends TypeKey<T>>(key: TypeKey<T>, instance: T): Container<Provide<P, [K, never]>> {
+    provideInstance<T, K extends TypeKey<T>>(key: K, instance: T): Container<Provide<P, [K, never]>> {
         this._setKeyProvider(key, { value: { instance } })
         return this as any
     }
 
     /** Requests the dependency or dependencies defined by `deps`, or throws if any transitive dependencies are not provided. */
-    request<K extends DependencyKey>(deps: K, ..._: CanRequest<this, K, []>): Actual<K> {
+    request<K extends DependencyKey>(deps: K, ..._: CanRequest<this, K, []>): Actual<K, P> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
             throw provider
@@ -320,22 +324,20 @@ export class Container<in P> {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild<S2 extends Scope = never, M extends Module[] = never>(
+    createChild<S2 extends Scope = never>(
         { scope = [] }: Container.ChildOptions<S2> = {},
-        ...modules: M
-    ): Container<Provide<Provide<P, [S2, never]>, ModuleProvides<M>>> {
-        return new Container({ scope, parent: this }).apply(...modules)
+    ): Container<Provide<P, S2 extends any ? [S2, never] : never>> {
+        return new Container<Provide<P, S2 extends any ? [S2, never] : never>>({ scope, parent: this })
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
-    createSubcomponent<Args extends any[], S2 extends Scope = never>(
+    createSubcomponent<Args extends any[], P2 = never, S2 extends Scope = never>(
         { scope = [] }: Container.ChildOptions<S2> = {},
-        f?: (child: Container<never>, ...args: Args) => Container<S2>,
-    ): Container.Subcomponent<Args, Provide<P, S2>> {
+        f?: (child: Container<never>, ...args: Args) => Container<P2>,
+    ): Container.Subcomponent<Args, Provide<Provide<P, S2 extends any ? [S2, never] : never>, P2>> {
         return (...args) => {
-            const child = new Container({ scope, parent: this })
-            f?.(child, ...args)
-            return child
+            const child = new Container<never>({ scope, parent: this })
+            return f?.(child, ...args) ?? child as any
         }
     }
 
@@ -343,7 +345,7 @@ export class Container<in P> {
     apply<M extends Module[]>(...modules: M): Container<Provide<P, ModuleProvides<M>>> {
         for (let mod of modules) {
             if (typeof mod == 'function') {
-                mod(this)
+                mod(this as any)
             } else {
                 mod.forEach(m => this.apply(m as any))
             }
@@ -392,9 +394,12 @@ export interface FunctionModule {
 /** An object used to provide definitions to a `Container` */
 export type Module = FunctionModule | Module[]
 
+export function Module<M extends Module[]>(...m: M): M {
+    return m
+}
+
 export type ModuleProvides<M> =
     M extends (ct: Container<never>) => Container<infer P> ? P :
     M extends [infer A, ...infer B] ? Provide<ModuleProvides<A>, ModuleProvides<B>> :
     M extends [] ? never :
-    M extends (infer A)[] ? ModuleProvides<A> :
     never

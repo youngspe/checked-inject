@@ -40,9 +40,9 @@ export abstract class AbstractKey<T> {
     get Optional(): Optional<this, T> { return this._Optional ??= new Optional(this) }
 
     Build<
-        F extends ((...args: any[]) => any) = this extends AbstractKey<infer F extends (...args: any[]) => any> ? F : never,
-    >(...args: Parameters<F>): Build<AbstractKey<F>, F> {
-        return new Build(this as AbstractKey<any>, ...args)
+        F extends (...args: any[]) => any = this extends AbstractKey<infer F extends (...args: any[]) => any> ? F : never,
+    >(...args: Parameters<F>): Build<this & AbstractKey<F>, F> {
+        return new Build<this & AbstractKey<F>, F>(this as any, ...args)
     }
 }
 
@@ -68,23 +68,23 @@ export function TypeKey<T, D = never>() {
         static readonly [_keySymbol]: readonly [T] | null
         static readonly [keyTag]: symbol | typeof MISSING_KEY_TAG = MISSING_KEY_TAG
 
-        // private static _Lazy?: GetLazy<any>
-        // /** Requests a function returning a lazily-computed value of `T`. */
-        // static get Lazy(): GetLazy<typeof this> { return this._Lazy ??= new GetLazy(this) }
+        private static _Lazy?: GetLazy<typeof this & TypeKey<T>, T>
+        /** Requests a function returning a lazily-computed value of `T`. */
+        static get Lazy(): GetLazy<typeof this & TypeKey<T>, T> { return this._Lazy ??= new GetLazy(this as any) }
 
-        // private static _Provider?: GetProvider<any>
-        // /** Requests a function returning a value of `T`. */
-        // static get Provider(): GetProvider<typeof this> { return this._Provider ??= new GetProvider(this) }
+        private static _Provider?: GetProvider<typeof this & TypeKey<T>, T>
+        /** Requests a function returning a value of `T`. */
+        static get Provider(): GetProvider<typeof this & TypeKey<T>, T> { return this._Provider ??= new GetProvider(this as any) }
 
-        // private static _Optional?: Optional<any>
-        // /** Requests a value of type `T` if provided, otherwise `undefined`. */
-        // static get Optional(): Optional<typeof this> { return this._Optional ??= new Optional(this) }
+        private static _Optional?: Optional<typeof this & TypeKey<T>, T>
+        /** Requests a value of type `T` if provided, otherwise `undefined`. */
+        static get Optional(): Optional<typeof this & TypeKey<T>, T> { return this._Optional ??= new Optional(this as any) }
 
-        // Build(
-        //     ...args: T extends (...args: infer A) => infer R ? A : never
-        // ): T extends (...args: infer A) => infer R ? Build<A, R> : never {
-        //     return new Build(this as any) as any
-        // }
+        static Build<
+            F extends (...args: any[]) => any = typeof this extends AbstractKey<infer F extends (...args: any[]) => any> ? F : never,
+        >(...args: Parameters<F>): Build<typeof this & TypeKey<F>, F> {
+            return new Build(this as any, ...args)
+        }
     }
 }
 
