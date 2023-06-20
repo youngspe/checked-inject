@@ -1,5 +1,6 @@
+import { DepsOf, InjectError } from "."
 import { Scope } from "./Scope"
-import { DependencyKey } from "./TypeKey"
+import { Actual, BaseKey, DependencyKey } from "./TypeKey"
 import { Class } from "./_internal"
 
 export namespace Inject {
@@ -7,73 +8,48 @@ export namespace Inject {
     export const scope: unique symbol = Symbol()
     export const binding: unique symbol = Symbol()
     const _bindingKey = Symbol()
-    abstract class _Binding<T> {
-        protected abstract [_bindingKey]: null
-        abstract readonly dependencies: any
-        abstract resolve(deps: any): T
+    // abstract class _Binding<T, K, D extends Actual<K>> {
+    //     protected abstract [_bindingKey]: null
+    //     abstract readonly dependencies: K
+    //     abstract resolve(deps: D): T
+    // }
+
+    const _deps = Symbol()
+
+    interface _Binding<T, D> {
+        readonly key: BaseKey<T, any>
+        [_deps]?: D
     }
 
-    class BindConstructor<T, D extends any[]> extends _Binding<T> {
-        protected override[_bindingKey] = null
-        override readonly dependencies: DependencyKey<D>
-        private _constructor: new (...args: D) => T
 
-        constructor(constructor: new (...args: D) => T, dependencies: DependencyKey<D>) {
-            super()
-            this._constructor = constructor
-            this.dependencies = dependencies
-        }
-
-        override resolve(deps: any): T {
-            return new this._constructor(...deps)
+    export function map<T, K extends DependencyKey>(src: K, f: (deps: Actual<K>) => T): _Binding<T, DepsOf<K>> {
+        return {
+            key: new class Map extends BaseKey<T, K> {
+                init(deps: InjectError | (() => Actual<K, never>)): InjectError | (() => T) {
+                    if (deps instanceof InjectError) return deps
+                    return () => f(deps())
+                }
+            }(src)
         }
     }
 
-    export function bindConstructor<T, D extends any[], DKeys extends DependencyKey<D> & any[]>(
-        constructor: new (...args: D) => T,
-        ...deps: DKeys): _Binding<T> {
-        return new BindConstructor(constructor, deps)
-    }
-
-    class BindFrom<T> extends _Binding<T> {
-        protected override[_bindingKey] = null
-        override readonly dependencies: DependencyKey<T>
-
-        constructor(source: DependencyKey<T>) {
-            super()
-            this.dependencies = source
-        }
-
-        override resolve(deps: any): T {
+    class From<K extends DependencyKey> extends BaseKey<Actual<K>, K> {
+        init(deps: InjectError | (() => Actual<K>)): InjectError | (() => Actual<K>) {
             return deps
         }
     }
 
-    export function bindFrom<T>(source: DependencyKey<T>): _Binding<T> {
-        return new BindFrom(source)
-    }
-
-    class BindWith<T, D> extends _Binding<T> {
-        protected override[_bindingKey] = null
-        override readonly dependencies: DependencyKey<D>
-        private _init: (deps: D) => T
-
-        constructor(deps: DependencyKey<D>, init: (deps: D) => T) {
-            super()
-            this.dependencies = deps
-            this._init = init
-        }
-
-        override resolve(deps: any): T {
-            return this._init(deps)
+    export function from<K extends DependencyKey>(src: K): _Binding<Actual<K>, DepsOf<K>> {
+        return {
+            key: new From(src)
         }
     }
 
-    export function bindWith<T, D>(deps: DependencyKey<D>, init: (deps: D) => T): _Binding<T> {
-        return new BindWith(deps, init)
-    }
+    // export function from<K>(src: K) {
+    //     return map(src, x => x)
+    // }
 
-    export type Binding<T> = _Binding<T> | (() => _Binding<T>)
+    export type Binding<T, D> = _Binding<T, D> | (() => _Binding<T, D>)
 }
 
 /** A class constructor that takes no arguments and can used as a `DependencyKey<T>`. */
@@ -106,11 +82,11 @@ export interface DefaultConstructor<T> {
  *  }
  *  ```
  */
-export type ClassWithBinding<T> = Class<T> & {
+export type ClassWithBinding<T, D> = Class<T> & {
     [Inject.scope]?: Scope
     /** A `Binding` used to resolve this class constructor as a `DependencyKey<T>`. */
-    [Inject.binding]: Inject.Binding<T>
+    [Inject.binding]: Inject.Binding<T, D>
 }
 
 /** A class constructor that can be used as a `DependencyKey<T>`. */
-export type InjectableClass<T> = DefaultConstructor<T> | ClassWithBinding<T>
+export type InjectableClass<T, D> = DefaultConstructor<T> | ClassWithBinding<T, D>

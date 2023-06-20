@@ -1,9 +1,10 @@
-import { Container, GetLazy, Inject, Module, Scope, Singleton, SubcomponentKey, TypeKey } from '../lib'
+import { Container, GetLazy, Inject, Module, Scope, Singleton, SubcomponentKey, TypeKey, keyTag } from '../lib'
 
-const NumberKey = new TypeKey<number>()
-const StringKey = new TypeKey<string>()
-const ArrayKey = new TypeKey<string[]>()
-const BooleanKey = new TypeKey<boolean>()
+
+class NumberKey extends TypeKey<number>() { static readonly [keyTag] = Symbol() }
+class StringKey extends TypeKey<string>() { static readonly [keyTag] = Symbol() }
+class ArrayKey extends TypeKey<string[]>() { static readonly [keyTag] = Symbol() }
+class BooleanKey extends TypeKey<boolean>() { static readonly [keyTag] = Symbol() }
 
 describe(Container, () => {
     test('provide and request', () => {
