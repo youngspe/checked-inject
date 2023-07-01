@@ -1,199 +1,302 @@
-import { Container, InjectError, InjectableClass, Scope } from "."
-import { Class } from "./_internal"
+import { Inject, Provide, Scope } from "."
+import { Container, InjectError, } from './Container'
+import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
 
-type OnlyObject = { [k: keyof any]: unknown } | unknown[]
+/**
+ * A class constructor with a `binding` that determines how to resolve it as a `DependencyKey<T>`.
+ *
+ * @example
+ *  ```
+ *  class MyClass1 {
+ *      constructor(x: number, y: string) {}
+ *      static inject = Inject.bindConstructor(this, NumberKey, StringKey)
+ *  }
+ *
+ *  class MyClass2 {
+ *      static inject: Inject.Binding<MyClass2> = () => Inject.bindFrom(MyClass3)
+ *  }
+ *
+ *  class MyClass3 extends MyClass2 {
+ *      constructor(x: string, y: string) {
+ *      }
+ *      static inject = Inject.bindWith({
+ *          x: MumberKey,
+ *          y: StringKey,
+ *      }, ({ x, y }) => new MyClass3(x.toString(), y))
+ *  }
+ *  ```
+ */
+export type ClassWithBinding<T, D extends Dependency> = Class<T> & {
+    /** A `Binding` used to resolve this class constructor as a `DependencyKey<T>`. */
+    [Inject.scope]?: Scope
+    readonly inject: Inject.Binding<T, D>
+}
+
+/** A class constructor that can be used as a `DependencyKey<T>`. */
+export type InjectableClass<T, D extends Dependency = any> = ClassWithBinding<T, D>
+
+interface OnlyObject<out T = unknown> {
+    readonly [k: keyof any]: T
+}
+
+interface OnlyObjectKey extends OnlyObject<AnyKey> { }
 
 /** An object representing a structured set of type keys to produce type `T`. */
-export type StructuredKey<T> = { readonly [K in keyof T]: DependencyKey<T[K]> }
+export type ObjectKey<T, D extends Dependency> =
+    T extends OnlyObject ? OnlyObjectKey & { readonly [K in keyof T]: DependencyKey<T[K], D> } :
+    never
+
+/** An array representing a structured set of type keys to produce type `T`. */
+export type ArrayKey<T, D extends Dependency> =
+    T extends [infer A, ...infer B] ? [DependencyKey<A, D>, ...ArrayKey<B, D>] :
+    T extends [] ? [] :
+    T extends readonly any[] ? AnyKey[] & { readonly [K in Extract<keyof T, number>]: DependencyKey<T[K], D> } :
+    never
+
+/** A structured set of type keys to produce type `T`. */
+export type StructuredKey<T, D extends Dependency = any> = ObjectKey<T, D> | ArrayKey<T, D>
 /** A dependency key that, when requested, resolves to a value of type `T`. */
-export type DependencyKey<T = any> = TypeKey<T> | AbstractKey<T> | (OnlyObject & StructuredKey<T>) | InjectableClass<T, any>
+export type DependencyKey<T, D extends Dependency = any> = AnyKey & (
+    | BaseTypeKey<T>
+    | HasBaseKeySymbol<T, D>
+    | StructuredKey<T, D>
+    | (T extends (null | undefined | void) ? T : never)
+)
+
+export type AnyKey =
+    | OnlyObject<AnyKey>
+    | AnyKey[]
+    | HasAbstractKeySymbol<any>
+    | PrivateConstruct
+    | null | undefined | void
+
+interface HasAbstractKeySymbol<out T> {
+    readonly [_abstractKeySymbol]: readonly [T] | null
+}
+
+interface HasTypeKeySymbol<out T> extends HasAbstractKeySymbol<T> {
+    readonly [_typeKeySymbol]: readonly [T] | null
+}
+
+const _baseKeySymbol = Symbol()
+
+export interface HasBaseKeySymbol<out T, D = any> extends HasAbstractKeySymbol<T> {
+    readonly [_baseKeySymbol]: readonly [T, D] | null
+}
+
 /** The actual type that a dependency key of type `D` resolves to. */
+export type Actual<K> =
+    K extends DependencyKey<infer _T> ? _T & (
+        K extends HasAbstractKeySymbol<infer T> ? T :
+        K extends InjectableClass<infer T, any> ? T :
+        K extends StructuredKey<infer T> ? T :
+        unknown
+    ) :
+    K extends any[] ? ArrayActual<K> :
+    K extends OnlyObject ? ObjectActual<K> :
+    K extends undefined ? undefined :
+    K extends null ? null :
+    K extends void ? void :
+    never
+
+type ArrayActual<K> =
+    K extends [] ? [] :
+    K extends [infer A, ...infer B] ? [Actual<A>, ...ArrayActual<B>] :
+    K extends (infer A)[] ? Actual<A>[] :
+    never
+
+type ObjectActual<K> = { [X in keyof K]: Actual<K[X]> }
+
+type ArrayContainerActual<K extends any[], P> =
+    K extends [] ? [] :
+    K extends [infer A, ...infer B] ? [ContainerActual<A, P>, ...ArrayContainerActual<B, P>] :
+    K extends (infer A)[] ? ContainerActual<A, P>[] :
+    never
+
+type ObjectContainerActual<K extends OnlyObject, P> = { [X in keyof K]: ContainerActual<K[X], P> }
+
+export type ContainerActual<K, P> =
+    & Actual<K>
+    & (
+        Actual<K> extends Container<infer S2> ? Container<Provide<P, S2>> :
+        Actual<K> extends (...args: infer A) => Container<infer S2> ? (...args: A) => Container<Provide<P, S2>> :
+        K extends HasAbstractKeySymbol<any> ? unknown :
+        K extends any[] ? ArrayContainerActual<K, P> :
+        K extends OnlyObject ? ObjectContainerActual<K, P> :
+        unknown
+    )
+
+export type DepsOf<K> =
+    K extends Scope ? K :
+    K extends BaseTypeKey<any> ? K :
+    K extends DependencyKey<infer _T, never> ? never :
+    K extends DependencyKey<infer _T, infer D> ? D :
+    K extends (infer T)[] ? DepsOf<T> :
+    K extends OnlyObject ? DepsOf<K[keyof K]> :
+    Dependency
 
 
-type KeysWhere<D, E> = { [P in keyof D]: D[P] extends E ? { [_ in P]: D[P] } : never }[keyof D]
-
-export type Actual<D, S = never> =
-    & (D extends DependencyKey<infer T> ? T : unknown)
-    & (D extends OnlyObject ? { [K in keyof KeysWhere<D, OnlyObject>]: Actual<D> } : unknown)
-    & (D extends SubcomponentKey<infer A, infer S2> ? Container.Subcomponent<A, S | S2> : unknown)
-    & (D extends typeof Container ? Container<S> : unknown)
+namespace OperatorSymbols {
+    export const Lazy = Symbol()
+    export const Provider = Symbol()
+    export const Optional = Symbol()
+}
 
 // Use this to prevent library consumers from generating types equivalent to `AbstractKey`.
 const _abstractKeySymbol: unique symbol = Symbol()
 
 /** Implementation detail--extend `BaseKey` instead. */
-export abstract class AbstractKey<T> {
-    private readonly [_abstractKeySymbol]: T[] = []
-    constructor(_sealed: typeof _abstractKeySymbol) { }
-
-
-    private _Lazy?: GetLazy<this, T>
+export abstract class AbstractKey<out T> implements HasAbstractKeySymbol<T> {
+    readonly [_abstractKeySymbol]: readonly [T] | null = null
+    private [OperatorSymbols.Lazy]?: Inject.GetLazy<any>
     /** Requests a function returning a lazily-computed value of `T`. */
-    get Lazy(): GetLazy<this, T> { return this._Lazy ??= new GetLazy(this) }
+    Lazy = function <Th extends AbstractKey<any> & AnyKey>(this: Th): Inject.GetLazy<Th> {
+        return this[OperatorSymbols.Lazy] ??= Inject.lazy<Th>(this)
+    }
 
-    private _Provider?: GetProvider<this, T>
+    private [OperatorSymbols.Provider]?: Inject.GetProvider<any>
     /** Requests a function returning a value of `T`. */
-    get Provider(): GetProvider<this, T> { return this._Provider ??= new GetProvider(this) }
+    Provider = function <Th extends AbstractKey<T> & AnyKey>(this: Th): Inject.GetProvider<Th> {
+        return this[OperatorSymbols.Provider] ??= Inject.provider(this)
+    }
 
-    private _Optional?: Optional<this, T>
+    private [OperatorSymbols.Optional]?: Inject.Optional<any>
     /** Requests a value of type `T` if provided, otherwise `undefined`. */
-    get Optional(): Optional<this, T> { return this._Optional ??= new Optional(this) }
+    Optional = function <Th extends AbstractKey<T> & AnyKey>(this: Th): Inject.Optional<Th> {
+        return this[OperatorSymbols.Optional] ??= Inject.optional(this)
+    }
 
-    Build<
-        F extends (...args: any[]) => any = this extends AbstractKey<infer F extends (...args: any[]) => any> ? F : never,
-    >(...args: Parameters<F>): Build<this & AbstractKey<F>, F> {
-        return new Build<this & AbstractKey<F>, F>(this as any, ...args)
+    Build = function <
+        Th extends DependencyKey<(...args: Args) => Out>,
+        Args extends any[],
+        Out = Th extends AbstractKey<(...args: Args) => infer O> ? O : never,
+    >(this: Th, ...args: Args): Inject.Build<Th, Args, Out> {
+        return Inject.build(this, ...args)
     }
 }
-
-// Use this to prevent library consumers from generating types equivalent to `TypeKey`.
-const _keySymbol: unique symbol = Symbol()
-
-export const keyTag: unique symbol = Symbol('keyTag')
 
 type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
-export interface TypeKey<out T = unknown, D = never> {
-    readonly [_keySymbol]: readonly [T] | null
-    readonly [keyTag]: symbol
+export type Dependency = Scope | HasTypeKeySymbol<any>
+
+// Use this to prevent library consumers from generating types equivalent to `TypeKey`.
+const _typeKeySymbol: unique symbol = Symbol()
+
+export interface BaseTypeKey<out T, Def = any> extends HasTypeKeySymbol<T> {
+    readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: Scope
     readonly name: string
+    readonly fullName: string
+    readonly of?: ClassLike<T>
+    readonly inject: null
+    readonly defaultInit?: Def
 }
 
-const MISSING_KEY_TAG = 'add `static readonly [keyTag] = Symbol()` to TypeKey implementation' as const
-
-// TODO: support default impl
-export function TypeKey<T, D = never>() {
-    return class TypeKeyClass {
-        static readonly [_keySymbol]: readonly [T] | null
-        static readonly [keyTag]: symbol | typeof MISSING_KEY_TAG = MISSING_KEY_TAG
-
-        private static _Lazy?: GetLazy<typeof this & TypeKey<T>, T>
-        /** Requests a function returning a lazily-computed value of `T`. */
-        static get Lazy(): GetLazy<typeof this & TypeKey<T>, T> { return this._Lazy ??= new GetLazy(this as any) }
-
-        private static _Provider?: GetProvider<typeof this & TypeKey<T>, T>
-        /** Requests a function returning a value of `T`. */
-        static get Provider(): GetProvider<typeof this & TypeKey<T>, T> { return this._Provider ??= new GetProvider(this as any) }
-
-        private static _Optional?: Optional<typeof this & TypeKey<T>, T>
-        /** Requests a value of type `T` if provided, otherwise `undefined`. */
-        static get Optional(): Optional<typeof this & TypeKey<T>, T> { return this._Optional ??= new Optional(this as any) }
-
-        static Build<
-            F extends (...args: any[]) => any = typeof this extends AbstractKey<infer F extends (...args: any[]) => any> ? F : never,
-        >(...args: Parameters<F>): Build<typeof this & TypeKey<F>, F> {
-            return new Build(this as any, ...args)
-        }
-    }
+export interface TypeKey<out T = any, Def extends BaseKey<T, any, any> = any> extends BaseTypeKey<T, Def>, AbstractKey<T> {
+    readonly keyTag: symbol
 }
 
-// /** A key used to provide and request instances of type `T`. */
-// export class TypeKey<out T = unknown, D = any> extends AbstractKey<T> {
-//     readonly name?: string
-//     readonly class?: ClassLike<T>
-//     readonly scope?: Scope
-//     readonly defaultInit?: TypeKey.Options<T, D>['default']
+const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
-//     private readonly [_keySymbol]: T[] = []
+interface TypeKeyClass<out T, Def> extends
+    AbstractKey<T>,
+    AbstractClass<any, [never]>,
+    BaseTypeKey<T, Def> { }
 
-//     constructor(
-//         { of, name = of?.name, scope, default: defaultInit }: TypeKey.Options<T, D> = {},
-//     ) {
-//         super(_abstractKeySymbol)
-//         this.class = of
-//         this.name = name
-//         this.scope = scope
-//         this.defaultInit = defaultInit
-//     }
-// }
+export function TypeKey<T>(): TypeKeyClass<T, never>
+export function TypeKey<T>(options: TypeKey.Options<T, never>): TypeKeyClass<T, never>
 
+export function TypeKey<
+    Def extends HasBaseKeySymbol<T>,
+    T = Def extends HasBaseKeySymbol<infer _T> ? _T : never,
+>(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
+
+export function TypeKey<
+    Def extends HasBaseKeySymbol<T>,
+    T,
+>({ default: defaultInit, of, name = of?.name }: TypeKey.Options<T, Def> = {} as any): TypeKeyClass<T, Def> {
+    return asMixin(class _TypeKey {
+        static readonly [_typeKeySymbol]: TypeKeyClass<T, Def>[typeof _typeKeySymbol] = null
+        static readonly keyTag: symbol | typeof MISSING_KEY_TAG = MISSING_KEY_TAG
+        static readonly of = of
+        static readonly fullName = this.name + (name ? `(${name})` : '')
+        static readonly defaultInit = defaultInit
+        static readonly inject = null
+        static toString() { return this.fullName }
+    }, AbstractKey<T>)
+}
 
 export namespace TypeKey {
-    export interface Options<T, D> {
-        name?: string,
-        of?: ClassLike<T>,
-        scope?: Scope,
-        default?: { deps: DependencyKey<D>, init: (deps: D) => T } | { instance: T } | (() => T)
+    export interface Options<T, Def extends HasBaseKeySymbol<T>> {
+        of?: ClassLike<T>
+        name?: string
+        default?: Def
     }
 
-    export function isTypeKey(target: any): target is TypeKey {
-        return _keySymbol in target
+    export interface DefaultWithDeps<T, K extends AnyKey> {
+        deps: K
+        init(deps: Actual<K>): T
+    }
+    export interface DefaultWithInstance<T> { instance: T }
+    export interface DefaultFunction<T> { (): T }
+
+    export function isTypeKey(target: any): target is BaseTypeKey<any> {
+        return _typeKeySymbol in target
     }
 }
 
+const _noDefault: unique symbol = Symbol()
 
 
 /** Convenience for a TypeKey that specifically resolves to a a function that, given `Args`, returns `T`. */
-// export class FactoryKey<Args extends any[], T, D = any> extends TypeKey<(...args: Args) => T, D> { }
 
-export type FactoryKey<Args extends any[], T, D = never> = TypeKey<(...args: Args) => T, D>
+export interface FactoryKey<Args extends any[], T> extends TypeKey<(...args: Args) => T> { }
 
-export type SubcomponentKey<Args extends any[], S = never> = TypeKey<Container.Subcomponent<Args>>
+// export function FactoryKey<Args extends any[], T, Src, K extends DependencyKey<Src>>(deps: K, f: (deps: Src, ...args: Args) => T) {
+//     return class extends TypeKey({ default: { deps, init: (deps) => (...args: Args) => f(deps, ...args) } }) {
+//         static readonly keyTag: symbol = Symbol()
+//     }
+// }
 
-/** A key that, upon request, transforms a provider of `D` into a provider of `T`. */
-export abstract class BaseKey<T, K extends DependencyKey<D>, D = Actual<K>> extends AbstractKey<T> {
+export function FactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...args: Args) => T, never>
+
+export function FactoryKey<
+    T,
+    Args extends any[],
+    K extends AnyKey,
+>(deps: K, fac: (deps: Actual<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, BaseKey<(...args: Args) => T, K>>
+
+export function FactoryKey<
+    T,
+    Args extends any[],
+    K extends AnyKey,
+>(
+    ...args:
+        | []
+        | [deps: K, fac: (deps: Actual<K>, ...args: Args) => T]
+): TypeKeyClass<(...args: Args) => T, BaseKey<(...args: Args) => T, K>> {
+    if (args.length == 2) {
+        let [deps, fac] = args
+        return TypeKey<BaseKey<(...args: Args) => T, K>>({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
+    }
+    return TypeKey()
+}
+
+/** A key that, upon request,transforms a provider for `K` into a provider of `T`. */
+export abstract class BaseKey<
+    out T = any,
+    out K extends AnyKey = any,
+    D = DepsOf<K>,
+> extends AbstractKey<T> implements HasBaseKeySymbol<T, D> {
+    readonly [_baseKeySymbol]: readonly [T, D] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
     readonly inner: K
 
     constructor(inner: K) {
-        super(_abstractKeySymbol)
+        super()
         this.inner = inner
     }
 
     /** Given a provide of `D` or an error, return a provider of `T` or an error. */
-    abstract init(deps: (() => D) | InjectError): (() => T) | InjectError
-}
-
-/** Requests a function returning a lazily-computed value of `T`. */
-export class GetLazy<K extends DependencyKey<T>, T = Actual<K>> extends BaseKey<() => T, K, T> {
-    override init(deps: (() => T) | InjectError): (() => () => T) | InjectError {
-        if (deps instanceof InjectError) return deps
-        let d: (() => T) | null = deps
-        let value: T | null = null
-
-        const f = () => {
-            if (d != null) {
-                value = d()
-                d = null
-            }
-            return value as T
-        }
-
-        return () => f
-    }
-}
-
-/** Requests a function returning a value of `T`. */
-export class GetProvider<K extends DependencyKey<T>, T = Actual<K>> extends BaseKey<() => T, K, T> {
-    override init(deps: (() => T) | InjectError): (() => () => T) | InjectError {
-        if (deps instanceof InjectError) return deps
-        return () => deps
-    }
-}
-
-/** Requests a value of type `T` if provided, otherwise `undefined`. */
-export class Optional<K extends DependencyKey<T>, T = Actual<K>> extends BaseKey<T | undefined, K, T> {
-    override init(deps: (() => T) | InjectError): () => (T | undefined) {
-        if (deps instanceof InjectError) return () => undefined
-        return deps
-    }
-}
-
-export class Build<
-    K extends DependencyKey<F>,
-    F extends (...args: Args) => any = Actual<K> extends (...args: any[]) => any ? Actual<K> : never,
-    Args extends any[] = F extends (...args: infer A) => any ? A : never,
-    Out = F extends (...args: any[]) => infer T ? T : unknown
-> extends BaseKey<Out, K, F> {
-    readonly args: Args
-    override init(deps: (() => F)): (() => Out) | InjectError {
-        if (deps instanceof InjectError) return deps
-        return () => deps()(...this.args)
-    }
-
-    constructor(inner: K, ...args: Args) {
-        super(inner)
-        this.args = args
-    }
+    abstract init(deps: (() => Actual<K>) | InjectError): (() => T) | InjectError
 }

@@ -1,10 +1,10 @@
-import { Container, GetLazy, Inject, Module, Scope, Singleton, SubcomponentKey, TypeKey, keyTag } from '../lib'
+import { Actual, Container, DependencyKey, Inject, Module, Scope, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
 
 
-class NumberKey extends TypeKey<number>() { static readonly [keyTag] = Symbol() }
-class StringKey extends TypeKey<string>() { static readonly [keyTag] = Symbol() }
-class ArrayKey extends TypeKey<string[]>() { static readonly [keyTag] = Symbol() }
-class BooleanKey extends TypeKey<boolean>() { static readonly [keyTag] = Symbol() }
+class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
+class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+class ArrayKey extends TypeKey<string[]>() { static readonly keyTag = Symbol() }
+class BooleanKey extends TypeKey<boolean>() { static readonly keyTag = Symbol() }
 
 describe(Container, () => {
     test('provide and request', () => {
@@ -25,16 +25,15 @@ describe(Container, () => {
 
     test('request structured dependencies', () => {
         const target = Container.create()
-
-        const out = target
             .provideInstance(NumberKey, 10)
             .provide(StringKey, {}, () => 'foo')
             .provide(ArrayKey, {}, () => ['a', 'b'])
-            .request({
-                a: NumberKey,
-                b: StringKey,
-                c: { d: ArrayKey }
-            })
+
+        const out = target.request({
+            a: NumberKey,
+            b: StringKey,
+            c: { d: ArrayKey }
+        })
 
         expect(out).toEqual({
             a: 10,
@@ -68,7 +67,7 @@ describe(Container, () => {
             .request({
                 a: NumberKey,
                 b: StringKey,
-                c: { d: ArrayKey, e: BooleanKey.Optional }
+                c: { d: ArrayKey, e: BooleanKey.Optional() }
             })
 
         expect(out).toEqual({
@@ -86,13 +85,13 @@ describe(Container, () => {
             .provide(StringKey, {}, () => 'foo')
             .provideInstance(BooleanKey, true)
             .provide(ArrayKey, {
-                a: NumberKey.Lazy,
-                b: new GetLazy({ c: StringKey }),
-                c: BooleanKey,
-            }, ({ a, b }) => [a().toString(), b().c])
+                a: NumberKey.Lazy(),
+                b: Inject.lazy({ c: StringKey }),
+                d: BooleanKey,
+            }, ({ a, b, d }) => [a().toString(), b().c, d.toString()])
             .request(ArrayKey)
 
-        expect(out).toEqual(['10', 'foo'])
+        expect(out).toEqual(['10', 'foo', 'true'])
     })
 
     test('inject structured provider dependencies', () => {
@@ -108,7 +107,7 @@ describe(Container, () => {
             .provideInstance(BooleanKey, true)
             .provide(ArrayKey, {
                 a: NumberKey,
-                b: { c: StringKey.Provider },
+                b: { c: StringKey.Provider() },
                 c: BooleanKey,
             }, ({ a, b: { c } }) => [a.toString(), c(), c()])
             .request(ArrayKey)
@@ -137,10 +136,9 @@ describe(Container, () => {
     })
 
     test('singleton returns the same instance every time', () => {
-        const target = Container.create()
-        const CustomKey = new TypeKey<{ num: number, str: string, bool: boolean }>()
+        class CustomKey extends TypeKey<{ num: number, str: string, bool: boolean }>() { static readonly keyTag = Symbol() }
 
-        target
+        const target = Container.create()
             .provideInstance(NumberKey, 10)
             .provide(StringKey, {}, () => 'foo')
             .provideInstance(BooleanKey, false)
@@ -165,7 +163,7 @@ describe(Container, () => {
     })
 
     test('dependencies are resolved from the appropriate scope', () => {
-        const MyScope = new Scope()
+        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
 
         const parent = Container.create()
             .provide(NumberKey, {}, () => 10)
@@ -192,16 +190,22 @@ describe(Container, () => {
         expect(child2.request(ArrayKey)).toBe(out2)
         expect(grandChild2b.request(ArrayKey)).toBe(out2)
 
-        expect(parent.request(ArrayKey.Optional)).not.toBeDefined()
+        expect(parent.request(ArrayKey.Optional())).not.toBeDefined()
         expect(out2).not.toBe(out1)
     })
 
     test('TypeKey.default is function', () => {
         // Non-singleton
-        const CustomKey1 = new TypeKey({ default: () => ({ a: 1 }) })
+        class CustomKey1 extends TypeKey({ default: Inject.call(() => ({ a: 1 })) }) { static readonly keyTag = Symbol() }
         // Singleton
-        const CustomKey2 = new TypeKey({ scope: Singleton, default: () => ({ b: 2 }) })
+        class CustomKey2 extends TypeKey({ default: Inject.call(() => ({ b: 2 })) }) {
+            static readonly keyTag = Symbol()
+            static readonly scope = Singleton
+        }
         const target = Container.create()
+        type Asdf = UnresolvedKeys<typeof target extends Container<infer P> ? P : never, typeof CustomKey1>
+        // type Asdf = UnresolvedKeys<typeof target extends Container<infer P> ? P : never, DependencyKey<any, never>>
+        // type Asdf = typeof CustomKey1 extends TypeKey<infer T, infer D> ? D : 'foo'
 
         const out1a = target.request(CustomKey1)
         const out1b = target.request(CustomKey1)
@@ -222,24 +226,22 @@ describe(Container, () => {
 
     test('TypeKey.default is { deps, init } object', () => {
         // Non-singleton
-        const CustomKey1 = new TypeKey({
-            default: {
-                deps: { num: NumberKey },
-                init: ({ num }) => ({ a: num }),
-            },
-        })
+        class CustomKey1 extends TypeKey({
+            default: Inject.map({ num: NumberKey }, ({ num }) => ({ a: num })),
+        }) { static readonly keyTag = Symbol() }
         // Singleton
-        const CustomKey2 = new TypeKey({
-            scope: Singleton,
-            default: {
-                deps: { str: StringKey },
-                init: ({ str }) => ({ b: str }),
-            },
-        })
+        class CustomKey2 extends TypeKey({
+            default: Inject.map({ str: StringKey }, ({ str }) => ({ b: str })),
+        }) {
+            static readonly keyTag = Symbol()
+            static readonly scope = Singleton
+        }
 
         const target = Container.create()
             .provideInstance(NumberKey, 1)
             .provideInstance(StringKey, 'foo')
+
+        type Foo = Actual<typeof CustomKey1>
 
         const out1a = target.request(CustomKey1)
         const out1b = target.request(CustomKey1)
@@ -260,18 +262,21 @@ describe(Container, () => {
 
     test('TypeKey.default is instance', () => {
         const instance = { a: 1 }
-        const CustomKey = new TypeKey({ default: { instance } })
+        class CustomKey extends TypeKey({ default: Inject.value(instance) }) { static readonly keyTag = Symbol() }
+
         const target = Container.create()
 
         const out = target.request(CustomKey)
-
 
         expect(out).toBe(instance)
     })
 
     test('TypeKey.scope is respected when no scope is provided', () => {
-        const MyScope = new Scope()
-        const CustomKey = new TypeKey<{ a: number }>({ scope: MyScope })
+        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
+        class CustomKey extends TypeKey<{ a: number }>() {
+            static readonly keyTag = Symbol()
+            static readonly scope = MyScope
+        }
 
         const parent = Container.create()
             .provideInstance(NumberKey, 10)
@@ -287,7 +292,7 @@ describe(Container, () => {
 
         const out2 = child2.request(CustomKey)
 
-        expect(parent.request(CustomKey.Optional)).toBeUndefined()
+        expect(parent.request(CustomKey.Optional())).toBeUndefined()
         expect(out1).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out1)
 
@@ -296,8 +301,11 @@ describe(Container, () => {
     })
 
     test('Provided scope overrides TypeKey.Scope', () => {
-        const MyScope = new Scope()
-        const CustomKey = new TypeKey<{ a: number }>({ scope: Singleton })
+        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
+        class CustomKey extends TypeKey<{ a: number }>() {
+            static readonly keyTag = Symbol()
+            static readonly scope = Singleton
+        }
 
         const parent = Container.create()
             .provideInstance(NumberKey, 10)
@@ -308,7 +316,7 @@ describe(Container, () => {
 
         const out = child1.request(CustomKey)
 
-        expect(parent.request(CustomKey.Optional)).toBeUndefined()
+        expect(parent.request(CustomKey.Optional())).toBeUndefined()
         expect(out).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out)
     })
@@ -354,62 +362,38 @@ describe(Container, () => {
         expect(out).toEqual(['10', 'foo', 'true'])
     })
 
-    test('resolve from InjectableClass', () => {
-        abstract class MyClass1 {
-            abstract num: number
-            static [Inject.binding]: Inject.Binding<MyClass1> = () => Inject.bindFrom(MyClass2)
-        }
-
-        class MyClass2 extends MyClass1 {
-            override num: number
+    test('InjectableConstructor', () => {
+        class MyClass1 {
+            num: number
             str: string
-
-            constructor(num: number, str: string) {
-                super()
-                this.num = num
-                this.str = str
+            bool: boolean
+            constructor(num: number, str: string, bool: boolean) {
+                this.num = num; this.str = str; this.bool = bool
             }
 
-            static [Inject.binding] = Inject.bindConstructor(this, NumberKey, StringKey)
+            static inject = Inject.construct(this, NumberKey, StringKey, BooleanKey)
         }
-        class MyClass3 extends MyClass2 {
-            bool = true
-            constructor() {
-                super(10, 'foo')
-            }
-
-            static [Inject.binding] = Inject.bindConstructor(this)
-        }
-
-        const target = Container.create()
-            .provideInstance(NumberKey, 20)
-            .provideInstance(StringKey, 'bar')
-
-        expect(target.request(MyClass1)).toEqual(new MyClass2(20, 'bar'))
-        expect(target.request(MyClass2)).toEqual(new MyClass2(20, 'bar'))
-        expect(target.request(MyClass3)).toEqual(new MyClass3())
-
-        const arr: number[] = target.request(Array<number>)
-        expect(arr).toEqual([])
     })
 
-    test('SubcomponentKey', () => {
-        const UserScope = new Scope()
-        const Keys = new class {
-            UserId = new TypeKey<string>()
-            UserName = new TypeKey<string>()
-            UserInfo = new TypeKey<{ userName: string, userId: string }>()
-            SubComponent = new SubcomponentKey({ scope: UserScope }, (ct, userName: string, userId: string) => ct
+    test('Inject.subcomponent', () => {
+        class UserScope extends Scope() { static readonly scopeTag = Symbol() }
+        class Keys {
+            static UserId = class UserId extends TypeKey<string>() { static readonly keyTag = Symbol() }
+            static UserName = class UserName extends TypeKey<string>() { static readonly keyTag = Symbol() }
+            static UserInfo = class UserInfo extends TypeKey<{ userName: string, userId: string }>() { static readonly keyTag = Symbol() }
+            static Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
+                .addScope(UserScope)
                 .provideInstance(this.UserName, userName)
                 .provideInstance(this.UserId, userId)
             )
-        }()
+        }
 
         const target = Container.create()
             .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
 
-        const sub1 = target.build(Keys.SubComponent, 'alice', '123')
-        const sub2 = target.build(Keys.SubComponent, 'bob', '456')
+
+        const sub1 = target.build(Keys.Subcomponent, 'alice', '123')
+        const sub2 = target.build(Keys.Subcomponent, 'bob', '456')
 
         expect(sub1.request(Keys.UserInfo)).toEqual({ userName: 'alice', userId: '123' })
         expect(sub2.request(Keys.UserInfo)).toEqual({ userName: 'bob', userId: '456' })

@@ -1,4 +1,4 @@
-import { Actual, TypeKey } from "../lib";
+import { Actual, ContainerActual, DependencyKey, ObjectKey, StructuredKey, TypeKey } from "../lib";
 import { Equal, StaticAssert } from "./utils";
 
 describe(TypeKey, () => {

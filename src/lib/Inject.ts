@@ -1,92 +1,186 @@
 import { DepsOf, InjectError } from "."
 import { Scope } from "./Scope"
-import { Actual, BaseKey, DependencyKey } from "./TypeKey"
+import { Container } from "./Container"
+import { ContainerActual, BaseKey, DependencyKey, Actual, TypeKey, AnyKey, Dependency } from "./TypeKey"
 import { Class } from "./_internal"
 
 export namespace Inject {
-    export const dependencies: unique symbol = Symbol()
     export const scope: unique symbol = Symbol()
-    export const binding: unique symbol = Symbol()
-    const _bindingKey = Symbol()
     // abstract class _Binding<T, K, D extends Actual<K>> {
     //     protected abstract [_bindingKey]: null
     //     abstract readonly dependencies: K
     //     abstract resolve(deps: D): T
     // }
 
-    const _deps = Symbol()
 
-    interface _Binding<T, D> {
-        readonly key: BaseKey<T, any>
-        [_deps]?: D
-    }
+    interface _Binding<T, D extends Dependency> extends BaseKey<T, any, D> { }
 
+    export abstract class Value<T> extends BaseKey<T, void, never> { }
 
-    export function map<T, K extends DependencyKey>(src: K, f: (deps: Actual<K>) => T): _Binding<T, DepsOf<K>> {
-        return {
-            key: new class Map extends BaseKey<T, K> {
-                init(deps: InjectError | (() => Actual<K, never>)): InjectError | (() => T) {
-                    if (deps instanceof InjectError) return deps
-                    return () => f(deps())
-                }
-            }(src)
+    class _Value<T> extends Value<T> {
+        private readonly _f: () => T
+
+        constructor(value: T) {
+            super()
+            this._f = () => value
+        }
+
+        init(): () => T {
+            return this._f
         }
     }
 
-    class From<K extends DependencyKey> extends BaseKey<Actual<K>, K> {
+    export function value<T>(value: T): Value<T> {
+        return new _Value(value)
+    }
+
+    export abstract class Map<T, K extends AnyKey> extends BaseKey<T, K> { }
+
+    class _Map<T, K extends AnyKey> extends Map<T, K> {
+        private readonly _transform: (deps: Actual<K>) => T
+
+        constructor(src: K, transform: (deps: Actual<K>) => T) {
+            super(src)
+            this._transform = transform
+        }
+
+        init(deps: InjectError | (() => Actual<K>)): InjectError | (() => T) {
+            if (deps instanceof InjectError) return deps
+            return () => this._transform(deps())
+        }
+    }
+
+    export function map<
+        T,
+        K extends AnyKey,
+    >(src: K, transform: (deps: Actual<K>) => T): Map<T, K> {
+        return new _Map(src, transform)
+    }
+
+    class From<K extends AnyKey> extends BaseKey<Actual<K>, K> {
         init(deps: InjectError | (() => Actual<K>)): InjectError | (() => Actual<K>) {
             return deps
         }
     }
 
-    export function from<K extends DependencyKey>(src: K): _Binding<Actual<K>, DepsOf<K>> {
-        return {
-            key: new From(src)
+    export function from<K extends AnyKey>(src: K) {
+        return new From(src)
+    }
+
+    export function construct<T, K extends AnyKey[]>(ctor: new (...args: Actual<K>) => T, ...deps: K) {
+        return map(deps, deps => new ctor(...deps))
+    }
+
+    export function call<T, K extends AnyKey[]>(init: (...args: Actual<K>) => T, ...deps: K) {
+        return map(deps, deps => init(...deps))
+    }
+
+    export abstract class GetLazy<K extends AnyKey> extends BaseKey<() => Actual<K>, K> { }
+
+    class _GetLazy<K extends AnyKey> extends GetLazy<K> {
+        override init(deps: (() => Actual<K>) | InjectError): (() => () => Actual<K>) | InjectError {
+
+            if (deps instanceof InjectError) return deps
+            let d: (() => Actual<K>) | null = deps
+            let value: Actual<K> | null = null
+
+            const f = () => {
+                if (d != null) {
+                    value = d()
+                    d = null
+                }
+                return value as Actual<K>
+            }
+
+            return () => f
         }
     }
 
-    // export function from<K>(src: K) {
-    //     return map(src, x => x)
-    // }
+    /** Requests a function returning a lazily-computed value of `T`. */
+    export function lazy<K extends AnyKey>(src: K): GetLazy<K> {
+        return new _GetLazy(src)
+    }
 
-    export type Binding<T, D> = _Binding<T, D> | (() => _Binding<T, D>)
+    export abstract class GetProvider<K extends AnyKey> extends BaseKey<() => Actual<K>, K> { }
+
+    class _GetProvider<K extends AnyKey> extends GetProvider<K> {
+        override init(deps: (() => Actual<K>) | InjectError): (() => () => Actual<K>) | InjectError {
+            if (deps instanceof InjectError) return deps
+            return () => deps
+        }
+    }
+
+    /** Requests a function returning a value of `T`. */
+    export function provider<K extends AnyKey>(src: K): GetProvider<K> {
+        return new _GetProvider(src)
+    }
+
+
+    export abstract class Optional<K extends AnyKey> extends BaseKey<Actual<K> | undefined, K, never> { }
+
+    class _Optional<K extends AnyKey> extends Optional<K> {
+        override init(deps: (() => Actual<K>) | InjectError): () => (Actual<K> | undefined) {
+            if (deps instanceof InjectError) return () => undefined
+            return deps
+        }
+    }
+
+    /** Requests a value of type `T` if provided, otherwise `undefined`. */
+    export function optional<K extends AnyKey>(src: K): Optional<K> {
+        return new _Optional(src)
+    }
+
+    export abstract class Build<
+        K extends DependencyKey<(...args: Args) => Out>,
+        Args extends any[],
+        Out = ReturnType<Actual<K>>,
+    > extends BaseKey<Out, K> { }
+    class _Build<
+        K extends DependencyKey<(...args: Args) => Out>,
+        Args extends any[],
+        Out = ReturnType<Actual<K>>,
+    > extends Build<K, Args, Out> {
+        readonly args: Args
+        override init(deps: (() => Actual<K>)): (() => Out) | InjectError {
+            if (deps instanceof InjectError) return deps
+            return () => deps()(...this.args)
+        }
+
+        constructor(inner: K, ...args: Args) {
+            super(inner)
+            this.args = args
+        }
+    }
+
+    export function build<
+        K extends DependencyKey<(...args: Args) => Out>,
+        Args extends any[],
+        Out = ReturnType<Actual<K>>,
+    >(src: K, ...args: Args): Build<K, Args, Out> {
+        return new _Build(src, ...args)
+    }
+
+    export abstract class SubcomponentDefinition<Args extends any[], P> extends BaseKey<(...args: Args) => Container<P>, typeof Container.Key> { }
+
+    class _SubcomponentDefinition<Args extends any[], P> extends SubcomponentDefinition<Args, P> {
+        private f: (ct: Container<never>, ...args: Args) => Container<P>
+
+        constructor(f: (ct: Container<never>, ...args: Args) => Container<P>) {
+            super(Container.Key)
+            this.f = f
+        }
+
+        override init(deps: (() => Container<never>) | InjectError): (() => (...args: Args) => Container<P>) | InjectError {
+            if (deps instanceof InjectError) return deps
+            return () => (...args) => this.f(deps().createChild(), ...args)
+        }
+    }
+
+
+    export function subcomponent<Args extends any[], P>(f: (ct: Container<never>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {
+        return new _SubcomponentDefinition(f)
+    }
+
+    export type Binding<T, D extends Dependency> = _Binding<T, D> | (() => _Binding<T, D>)
+
 }
-
-/** A class constructor that takes no arguments and can used as a `DependencyKey<T>`. */
-export interface DefaultConstructor<T> {
-    new(): T
-    [Inject.scope]?: Scope
-}
-
-/**
- * A class constructor with a `binding` that determines how to resolve it as a `DependencyKey<T>`.
- *
- * @example
- *  ```
- *  class MyClass1 {
- *      constructor(x: number, y: string) {}
- *      static [Inject.binding] = Inject.bindConstructor(this, NumberKey, StringKey)
- *  }
- *
- *  class MyClass2 {
- *      static [Inject.binding]: Inject.Binding<MyClass2> = () => Inject.bindFrom(MyClass3)
- *  }
- *
- *  class MyClass3 extends MyClass2 {
- *      constructor(x: string, y: string) {
- *      }
- *      static [Inject.binding] = Inject.bindWith({
- *          x: MumberKey,
- *          y: StringKey,
- *      }, ({ x, y }) => new MyClass3(x.toString(), y))
- *  }
- *  ```
- */
-export type ClassWithBinding<T, D> = Class<T> & {
-    [Inject.scope]?: Scope
-    /** A `Binding` used to resolve this class constructor as a `DependencyKey<T>`. */
-    [Inject.binding]: Inject.Binding<T, D>
-}
-
-/** A class constructor that can be used as a `DependencyKey<T>`. */
-export type InjectableClass<T, D> = DefaultConstructor<T> | ClassWithBinding<T, D>
