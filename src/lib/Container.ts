@@ -1,6 +1,6 @@
 import { AbstractKey, BaseKey, DependencyKey, InjectableClass, Scope, Singleton, StructuredKey } from "."
 import { Inject } from "./Inject"
-import { Actual, AnyKey, BaseTypeKey, ContainerActual, Dependency, DepsOf, HasBaseKeySymbol, TypeKey, } from "./TypeKey"
+import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, Dependency, DepsOf, TypeKey, } from "./TypeKey"
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -49,20 +49,30 @@ export class ScopeUnavailableError extends InjectError {
     }
 }
 
+// This entry has a dependency key and an initializer function
+interface EntryInit<T, P, K extends AnyKey> {
+    deps: K
+    init: (deps: ContainerActual<K, P>) => T
+    scope?: Scope
+}
+
+interface EntryInstance<T> {
+    instance: T
+}
+
 interface Entry<T, P, K extends AnyKey> {
     value:
-    // This entry has a dependency key and an initializer function
-    | { deps: K, init: (deps: ContainerActual<K, P>) => T, scope?: Scope }
+    | EntryInit<T, P, K>
     // This entry has a predefined instance we can return
-    | { instance: T }
+    | EntryInstance<T>
 }
 
 const _classTypeKey = Symbol()
 
 type _UnresolvedKeys<AllKeys, Solved, K> =
     K extends AllKeys ? Exclude<K, Solved> :
-    K extends BaseTypeKey<infer _T, never> ? K :
-    K extends BaseTypeKey<infer _T, HasBaseKeySymbol<infer _T, infer D>> ? _UnresolvedKeys<
+    K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
+    K extends (BaseTypeKeyWithDefault<infer _T, infer D> | ClassWithDefault<infer _T, infer D>) ? _UnresolvedKeys<
         AllKeys,
         Solved,
         D | (K extends { scope: infer Scp extends Scope } ? Scp : never)
@@ -79,8 +89,8 @@ type Keys<Deps> = Deps extends DepPair<infer K, infer _D> ? K : never
 
 type DepsForKey<Deps, K> =
     K extends Keys<Deps> ? (Deps extends DepPair<K, infer D> ? D : never) :
-    K extends BaseTypeKey<infer _T, never> ? K :
-    K extends BaseTypeKey<infer _T, HasBaseKeySymbol<infer _T, infer D>> ? D :
+    K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
+    K extends (BaseTypeKeyWithDefault<infer _T, infer D> | ClassWithDefault<infer _T, infer D>) ? D :
     K
 
 export type Provide<Old, New> =
@@ -122,7 +132,7 @@ export class Container<P> implements _Container<P> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: S[] | S } = {}): Container<
+    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<
         | DepPair<typeof Singleton>
         | DepPair<typeof Container.Key>
         | (S extends any ? DepPair<S> : never)
@@ -161,7 +171,7 @@ export class Container<P> implements _Container<P> {
                 if (def != undefined) {
                     const scope = key.scope
                     // Use the default provider if available for this key
-                    entry = { value: { deps: key.defaultInit as BaseKey<T> & K, init: deps => deps, scope } }
+                    entry = { value: { deps: key.defaultInit, init: deps => deps as T, scope } }
                     break
                 }
 
@@ -232,22 +242,19 @@ export class Container<P> implements _Container<P> {
         }
     }
 
-    private _getClassProvider<T>(cls: InjectableClass<T, any>): (() => T) | InjectError {
+    private _getClassTypKey<T>(cls: InjectableClass<T>): TypeKey<T> {
         const _cls: typeof cls & { [_classTypeKey]?: TypeKey<T> } = cls
-        if (!_cls[_classTypeKey] || !Object.getOwnPropertySymbols(_cls).includes(_classTypeKey)) {
-            const binding = typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject
-
-            _cls[_classTypeKey] = class _X extends TypeKey({
-                of: _cls,
-                default: binding,
-            }) {
-                static readonly keyTag: symbol = Symbol()
-                static readonly scope = _cls[Inject.scope]
-            }
+        return _cls[_classTypeKey] ??= class _X extends TypeKey({
+            of: _cls,
+            default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
+        }) {
+            static readonly keyTag: symbol = Symbol()
+            static readonly scope = _cls.scope
         }
+    }
 
-        const typeKey = _cls[_classTypeKey] as TypeKey<T>
-        return this._getTypeKeyProvider(typeKey)
+    private _getClassProvider<T>(cls: InjectableClass<T>): (() => T) | InjectError {
+        return this._getTypeKeyProvider(this._getClassTypKey(cls))
     }
 
     // Returns a provider for the given `DependencyKey`, or an error if any of its transitive dependencies are not provided.
@@ -297,24 +304,54 @@ export class Container<P> implements _Container<P> {
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     provide<
-        T, K extends TypeKey<T>, SrcK extends AnyKey,
-        S extends Scope = K['scope'] extends infer A extends Scope ? A : never,
+        K extends TypeKey<any> | InjectableClass<any>, SrcK extends AnyKey,
+        S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
     >(
         key: K,
-        ...args: [...scope: [scope: S] | [], deps: SrcK, init: (deps: Actual<SrcK>) => T]
+        ...args: [
+            ...scope: [scope: S] | [],
+            ...init: [BaseKey<Actual<K>, SrcK, any>] | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
+        ]
     ): Container<Provide<P, DepPair<K, S | DepsOf<SrcK>>>> {
+        type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
-        const scope = args.length == 3 ? args[0] : key.scope
-        const deps = args[args.length - 2] as SrcK
-        const init = args[args.length - 1] as (deps: ContainerActual<SrcK, P>) => T
+        const scope = Scope.isScope(args[0]) ? args[0] : key.scope
+        let entry: Entry<T, P, AnyKey>
 
-        this._setKeyProvider(key, { value: { deps, init, scope } })
+        if (typeof args[args.length - 1] == 'function') {
+            entry = {
+                value: {
+                    deps: args[args.length - 2] as AnyKey,
+                    init: args[args.length - 1] as (deps: any) => T,
+                    scope,
+                }
+            }
+        } else {
+            const deps = args[args.length - 1] as BaseKey<T, SrcK, any>
+            if (deps instanceof Inject.Value) {
+                entry = {
+                    value: { instance: deps.instance }
+                }
+            } else {
+                entry = {
+                    value: {
+                        deps,
+                        init: deps => deps,
+                    }
+                }
+            }
+        }
+
+        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
+        this._setKeyProvider(_key, entry)
         return this as any
     }
 
     /** Registers 'key' to provide the given `instance`. */
-    provideInstance<T, K extends TypeKey<T>>(key: K, instance: T): Container<Provide<P, DepPair<K, never>>> {
-        this._setKeyProvider(key, { value: { instance } })
+    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<Provide<P, DepPair<K, never>>> {
+        type T = Actual<K>
+        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
+        this._setKeyProvider(_key, { value: { instance } })
         return this as any
     }
 
@@ -372,12 +409,17 @@ export class Container<P> implements _Container<P> {
     }
 
     /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
-    readonly build = function <K extends DependencyKey<(...args: any[]) => any>, Th extends CanRequest<P, K>>(
+    readonly build = function <
+        K extends AnyKey,
+        Th extends CanRequest<P, K>,
+        Args extends ContainerActual<K, P> extends (...args: infer A) => Out ? A : never,
+        Out = ContainerActual<K, P> extends (...args: Args) => infer O ? O : unknown,
+    >(
         this: Th,
         deps: K,
-        ...args: Parameters<ContainerActual<K, P>>
-    ): ReturnType<ContainerActual<K, P>> {
-        return this.request(deps)(...args)
+        ...args: Args
+    ): Out {
+        return (this.request(deps) as (...args: Args) => Out)(...args)
     }
 }
 
@@ -401,7 +443,7 @@ export interface FunctionModule {
 }
 
 /** An object used to provide definitions to a `Container` */
-export type Module = FunctionModule | Module[]
+export type Module = FunctionModule | readonly Module[]
 
 export function Module<M extends Module[]>(...m: M): M {
     return m
@@ -409,6 +451,6 @@ export function Module<M extends Module[]>(...m: M): M {
 
 export type ModuleProvides<M> =
     M extends (ct: Container<never>) => Container<infer P> ? P :
-    M extends [infer A, ...infer B] ? Provide<ModuleProvides<A>, ModuleProvides<B>> :
+    M extends readonly [infer A, ...infer B] ? Provide<ModuleProvides<A>, ModuleProvides<B>> :
     M extends [] ? never :
     never

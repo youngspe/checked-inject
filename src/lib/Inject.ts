@@ -5,7 +5,6 @@ import { ContainerActual, BaseKey, DependencyKey, Actual, TypeKey, AnyKey, Depen
 import { Class } from "./_internal"
 
 export namespace Inject {
-    export const scope: unique symbol = Symbol()
     // abstract class _Binding<T, K, D extends Actual<K>> {
     //     protected abstract [_bindingKey]: null
     //     abstract readonly dependencies: K
@@ -15,13 +14,13 @@ export namespace Inject {
 
     interface _Binding<T, D extends Dependency> extends BaseKey<T, any, D> { }
 
-    export abstract class Value<T> extends BaseKey<T, void, never> { }
-
-    class _Value<T> extends Value<T> {
+    export abstract class Value<T> extends BaseKey<T, void, never> {
+        readonly instance: T
         private readonly _f: () => T
 
         constructor(value: T) {
             super()
+            this.instance = value
             this._f = () => value
         }
 
@@ -30,13 +29,13 @@ export namespace Inject {
         }
     }
 
+    class _Value<T> extends Value<T> { }
+
     export function value<T>(value: T): Value<T> {
         return new _Value(value)
     }
 
-    export abstract class Map<T, K extends AnyKey> extends BaseKey<T, K> { }
-
-    class _Map<T, K extends AnyKey> extends Map<T, K> {
+    export abstract class Map<T, K extends AnyKey> extends BaseKey<T, K> {
         private readonly _transform: (deps: Actual<K>) => T
 
         constructor(src: K, transform: (deps: Actual<K>) => T) {
@@ -49,6 +48,8 @@ export namespace Inject {
             return () => this._transform(deps())
         }
     }
+
+    class _Map<T, K extends AnyKey> extends Map<T, K> { }
 
     export function map<
         T,
@@ -75,9 +76,7 @@ export namespace Inject {
         return map(deps, deps => init(...deps))
     }
 
-    export abstract class GetLazy<K extends AnyKey> extends BaseKey<() => Actual<K>, K> { }
-
-    class _GetLazy<K extends AnyKey> extends GetLazy<K> {
+    export abstract class GetLazy<K extends AnyKey> extends BaseKey<() => Actual<K>, K> {
         override init(deps: (() => Actual<K>) | InjectError): (() => () => Actual<K>) | InjectError {
 
             if (deps instanceof InjectError) return deps
@@ -96,19 +95,21 @@ export namespace Inject {
         }
     }
 
+    class _GetLazy<K extends AnyKey> extends GetLazy<K> { }
+
     /** Requests a function returning a lazily-computed value of `T`. */
     export function lazy<K extends AnyKey>(src: K): GetLazy<K> {
         return new _GetLazy(src)
     }
 
-    export abstract class GetProvider<K extends AnyKey> extends BaseKey<() => Actual<K>, K> { }
-
-    class _GetProvider<K extends AnyKey> extends GetProvider<K> {
+    export abstract class GetProvider<K extends AnyKey> extends BaseKey<() => Actual<K>, K> {
         override init(deps: (() => Actual<K>) | InjectError): (() => () => Actual<K>) | InjectError {
             if (deps instanceof InjectError) return deps
             return () => deps
         }
     }
+
+    class _GetProvider<K extends AnyKey> extends GetProvider<K> { }
 
     /** Requests a function returning a value of `T`. */
     export function provider<K extends AnyKey>(src: K): GetProvider<K> {
@@ -116,14 +117,14 @@ export namespace Inject {
     }
 
 
-    export abstract class Optional<K extends AnyKey> extends BaseKey<Actual<K> | undefined, K, never> { }
-
-    class _Optional<K extends AnyKey> extends Optional<K> {
+    export abstract class Optional<K extends AnyKey> extends BaseKey<Actual<K> | undefined, K, never> {
         override init(deps: (() => Actual<K>) | InjectError): () => (Actual<K> | undefined) {
             if (deps instanceof InjectError) return () => undefined
             return deps
         }
     }
+
+    class _Optional<K extends AnyKey> extends Optional<K> { }
 
     /** Requests a value of type `T` if provided, otherwise `undefined`. */
     export function optional<K extends AnyKey>(src: K): Optional<K> {
@@ -134,12 +135,7 @@ export namespace Inject {
         K extends DependencyKey<(...args: Args) => Out>,
         Args extends any[],
         Out = ReturnType<Actual<K>>,
-    > extends BaseKey<Out, K> { }
-    class _Build<
-        K extends DependencyKey<(...args: Args) => Out>,
-        Args extends any[],
-        Out = ReturnType<Actual<K>>,
-    > extends Build<K, Args, Out> {
+    > extends BaseKey<Out, K> {
         readonly args: Args
         override init(deps: (() => Actual<K>)): (() => Out) | InjectError {
             if (deps instanceof InjectError) return deps
@@ -151,6 +147,11 @@ export namespace Inject {
             this.args = args
         }
     }
+    class _Build<
+        K extends DependencyKey<(...args: Args) => Out>,
+        Args extends any[],
+        Out = ReturnType<Actual<K>>,
+    > extends Build<K, Args, Out> { }
 
     export function build<
         K extends DependencyKey<(...args: Args) => Out>,
@@ -160,9 +161,7 @@ export namespace Inject {
         return new _Build(src, ...args)
     }
 
-    export abstract class SubcomponentDefinition<Args extends any[], P> extends BaseKey<(...args: Args) => Container<P>, typeof Container.Key> { }
-
-    class _SubcomponentDefinition<Args extends any[], P> extends SubcomponentDefinition<Args, P> {
+    export abstract class SubcomponentDefinition<Args extends any[], P> extends BaseKey<(...args: Args) => Container<P>, typeof Container.Key> {
         private f: (ct: Container<never>, ...args: Args) => Container<P>
 
         constructor(f: (ct: Container<never>, ...args: Args) => Container<P>) {
@@ -175,6 +174,8 @@ export namespace Inject {
             return () => (...args) => this.f(deps().createChild(), ...args)
         }
     }
+
+    class _SubcomponentDefinition<Args extends any[], P> extends SubcomponentDefinition<Args, P> { }
 
 
     export function subcomponent<Args extends any[], P>(f: (ct: Container<never>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {

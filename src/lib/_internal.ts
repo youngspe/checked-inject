@@ -4,12 +4,11 @@ abstract class PrivateConstructClass {
 
 type _PrivateConstruct = typeof PrivateConstructClass
 
-export interface PrivateConstruct extends _PrivateConstruct {}
+export interface PrivateConstruct extends _PrivateConstruct { }
 
 export type AbstractClass<T = any, Args extends any[] = any[]> = abstract new (...args: Args) => T
 
-export type Class<T = any> = (PrivateConstruct & { prototype: T }) | AbstractClass<T>
-
+export interface Class<T = any> extends PrivateConstruct { prototype: T }
 
 export type CanMixinFrom<M> = object & { readonly [K in keyof M]?: M[K] }
 

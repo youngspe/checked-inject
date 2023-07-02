@@ -1,4 +1,4 @@
-import { Actual, Container, DependencyKey, Inject, Module, Scope, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
+import { Actual, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, Container, ContainerActual, DependencyKey, DepsOf, Inject, InjectableClass, Module, Scope, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
 
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
@@ -203,9 +203,6 @@ describe(Container, () => {
             static readonly scope = Singleton
         }
         const target = Container.create()
-        type Asdf = UnresolvedKeys<typeof target extends Container<infer P> ? P : never, typeof CustomKey1>
-        // type Asdf = UnresolvedKeys<typeof target extends Container<infer P> ? P : never, DependencyKey<any, never>>
-        // type Asdf = typeof CustomKey1 extends TypeKey<infer T, infer D> ? D : 'foo'
 
         const out1a = target.request(CustomKey1)
         const out1b = target.request(CustomKey1)
@@ -224,7 +221,7 @@ describe(Container, () => {
         expect(out2a).toBe(out2b)
     })
 
-    test('TypeKey.default is { deps, init } object', () => {
+    test('TypeKey.default is Inject.map', () => {
         // Non-singleton
         class CustomKey1 extends TypeKey({
             default: Inject.map({ num: NumberKey }, ({ num }) => ({ a: num })),
@@ -362,7 +359,7 @@ describe(Container, () => {
         expect(out).toEqual(['10', 'foo', 'true'])
     })
 
-    test('InjectableConstructor', () => {
+    test('Injectable class provide', () => {
         class MyClass1 {
             num: number
             str: string
@@ -373,6 +370,45 @@ describe(Container, () => {
 
             static inject = Inject.construct(this, NumberKey, StringKey, BooleanKey)
         }
+
+        class MyClass2<T> {
+            private x: T
+            constructor(x: T) {
+                this.x = x
+            }
+        }
+
+        const target = Container.create()
+            .provideInstance(MyClass1, new MyClass1(20, 'bar', false))
+            .provide(MyClass2, Inject.value(new MyClass2(30)))
+
+        const out1 = target.request(MyClass1)
+        const out2 = target.request(MyClass2)
+
+        expect(out1).toEqual(new MyClass1(20, 'bar', false))
+        expect(out2).toEqual(new MyClass2(30))
+    })
+
+    test('Injectable class default', () => {
+        class MyClass1 {
+            num: number
+            str: string
+            bool: boolean
+            constructor(num: number, str: string, bool: boolean) {
+                this.num = num; this.str = str; this.bool = bool
+            }
+
+            static inject = Inject.construct(this, NumberKey, StringKey, BooleanKey)
+        }
+
+        const target = Container.create()
+            .provideInstance(NumberKey, 10)
+            .provideInstance(StringKey, 'foo')
+            .provideInstance(BooleanKey, true)
+
+        const out = target.request(MyClass1)
+
+        expect(out).toEqual(new MyClass1(10, 'foo', true))
     })
 
     test('Inject.subcomponent', () => {
@@ -390,7 +426,6 @@ describe(Container, () => {
 
         const target = Container.create()
             .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
-
 
         const sub1 = target.build(Keys.Subcomponent, 'alice', '123')
         const sub2 = target.build(Keys.Subcomponent, 'bob', '456')
