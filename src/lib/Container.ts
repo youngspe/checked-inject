@@ -1,6 +1,8 @@
-import { AbstractKey, BaseKey, DependencyKey, InjectableClass, Scope, Singleton, StructuredKey } from "."
+import { BaseKey, DependencyKey, InjectableClass } from "."
+import { Scope, Singleton } from './Scope'
 import { Inject } from "./Inject"
-import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, Dependency, DepsOf, TypeKey, } from "./TypeKey"
+import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, DepsOf, IsSync, RequireSync, TypeKey, } from "./TypeKey"
+import { Initializer, isPromise, nullable } from "./_internal"
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -10,6 +12,15 @@ export class TypeKeyNotProvidedError extends InjectError {
     readonly key: TypeKey
     constructor(key: TypeKey) {
         super(key.name ? `TypeKey ${key.name} not provided.` : 'TypeKey not provided.')
+        this.key = key
+    }
+}
+
+/** Error thrown when requeting a TypeKey whose value was not provided. */
+export class DependencyNotSyncError extends InjectError {
+    readonly key?: AnyKey
+    constructor(key?: AnyKey) {
+        super('Dependency not provided synchronously.')
         this.key = key
     }
 }
@@ -51,13 +62,16 @@ export class ScopeUnavailableError extends InjectError {
 
 // This entry has a dependency key and an initializer function
 interface EntryInit<T, P, K extends AnyKey> {
-    deps: K
-    init: (deps: ContainerActual<K, P>) => T
     scope?: Scope
+    binding: BaseKey<T, K, any, P, any>
 }
 
 interface EntryInstance<T> {
     instance: T
+}
+
+interface EntryPromise<T> {
+    promise: Promise<T>
 }
 
 interface Entry<T, P, K extends AnyKey> {
@@ -65,6 +79,7 @@ interface Entry<T, P, K extends AnyKey> {
     | EntryInit<T, P, K>
     // This entry has a predefined instance we can return
     | EntryInstance<T>
+    | EntryPromise<T>
 }
 
 const _classTypeKey = Symbol()
@@ -72,25 +87,45 @@ const _classTypeKey = Symbol()
 type _UnresolvedKeys<AllKeys, Solved, K> =
     K extends AllKeys ? Exclude<K, Solved> :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
-    K extends (BaseTypeKeyWithDefault<infer _T, infer D> | ClassWithDefault<infer _T, infer D>) ? _UnresolvedKeys<
+    K extends (
+        | BaseTypeKeyWithDefault<infer _T, infer D, any>
+        | ClassWithDefault<infer _T, infer D, any>
+    ) ? _UnresolvedKeys<
         AllKeys,
         Solved,
         D | (K extends { scope: infer Scp extends Scope } ? Scp : never)
     > :
+    K extends (
+        | IsSync<BaseTypeKeyWithDefault<infer _T, any, infer Sync>>
+        | IsSync<ClassWithDefault<infer _T, any, infer Sync>>
+    ) ? _UnresolvedKeys<AllKeys, Solved, Sync> :
     K
 
 export type UnresolvedKeys<P, K extends AnyKey> = _UnresolvedKeys<Keys<P>, SimplifiedDeps<P>, DepsOf<K>>
 
+const _requestFailedSymbol = Symbol()
+
+export interface RequestFailed<K> {
+    [_requestFailedSymbol]: K
+}
+
 export type CanRequest<P, K extends AnyKey> =
-    [UnresolvedKeys<P, K>] extends [never] ? Container<P> :
-    never
+    & Container<P>
+    & ([UnresolvedKeys<P, K>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
 type Keys<Deps> = Deps extends DepPair<infer K, infer _D> ? K : never
 
 type DepsForKey<Deps, K> =
     K extends Keys<Deps> ? (Deps extends DepPair<K, infer D> ? D : never) :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
-    K extends (BaseTypeKeyWithDefault<infer _T, infer D> | ClassWithDefault<infer _T, infer D>) ? D :
+    K extends (
+        | BaseTypeKeyWithDefault<infer _T, infer D, any>
+        | ClassWithDefault<infer _T, infer D, any>
+    ) ? D :
+    K extends (
+        | IsSync<BaseTypeKeyWithDefault<infer _T, any, infer Sync>>
+        | IsSync<ClassWithDefault<infer _T, any, infer Sync>>
+    ) ? Sync :
     K
 
 export type Provide<Old, New> =
@@ -118,8 +153,12 @@ interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
 }
 
+class _AsyncScope extends Scope() { static readonly scopeTag = Symbol() }
+export type AsyncScope = typeof _AsyncScope
+
 /** The dependency injection container for `structured-injection`. */
 export class Container<P> implements _Container<P> {
+    [_requestFailedSymbol]: unknown
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
@@ -153,7 +192,7 @@ export class Container<P> implements _Container<P> {
     }
 
     // Returns a provider for the given `TypeKey`, or an error if it or any of its transitive dependencies are not provided.
-    private _getTypeKeyProvider<T, K extends AnyKey = any>(key: TypeKey<T>): (() => T) | InjectError {
+    private _getTypeKeyProvider<T, K extends AnyKey = any>(key: TypeKey<T>): Initializer<T> | InjectError {
         let entry: Entry<T, P, K>
 
         // Traverse this container and its parents until we find an entry
@@ -167,11 +206,12 @@ export class Container<P> implements _Container<P> {
             entryContainer = entryContainer._parent
             if (entryContainer == undefined) {
 
-                const def = key.defaultInit
-                if (def != undefined) {
+                const binding = key.defaultInit
+                if (binding != undefined) {
+
                     const scope = key.scope
                     // Use the default provider if available for this key
-                    entry = { value: { deps: key.defaultInit, init: deps => deps as T, scope } }
+                    entry = { value: { binding, scope } }
                     break
                 }
 
@@ -182,7 +222,8 @@ export class Container<P> implements _Container<P> {
         const value = entry.value
 
         // If this dependency is just an instance, return that
-        if ('instance' in value) return () => value.instance
+        if ('instance' in value) return { sync: true, init: () => value.instance }
+        if ('promise' in value) return { sync: false, init: () => value.promise }
 
         // Pick the appropriate container from this or its ancestors to retrieve the dependencies
         // If this entry has no scope, use the current container. Otherwise, find a container that contains the scope
@@ -222,24 +263,39 @@ export class Container<P> implements _Container<P> {
         }
 
         // Get the dependencies needed to intialize the requested value
-        const depsResult: (() => ContainerActual<K, P>) | InjectError = dependencyContainer._getProvider(value.deps)
-        if (depsResult instanceof InjectError) return new DependencyFailedError(depsResult)
-        let deps: (() => ContainerActual<K, P>) | null = depsResult
+        const depsResult = (dependencyContainer as Container<P>)._getProvider(value.binding.inner)
+        const initializer = value.binding.init(depsResult)
 
-        return () => {
-            // Leave room for singletons in the future: between invocations, assume value could be changed to an instance
-            // Assuming entry won't change from 'instance' to 'init', deps should be defined at this point
-            if ('init' in entry.value) {
-                const instance = entry.value.init(deps!())
-                // If there's no scope, just return the created instance
-                if (entry.value.scope == undefined) return instance
-                // If there is a scope, store the instance so we can return the same one every time
-                entry.value = { instance }
+        if (initializer instanceof InjectError) return new DependencyFailedError(initializer)
+        if (value.scope == undefined) return initializer
+        let init = nullable(initializer)
+
+        const provider: Initializer.Base<T> = {
+            sync: initializer.sync, init() {
+                try {
+                    if ('instance' in entry.value) return entry.value.instance
+                    if ('promise' in entry.value) return entry.value.promise
+
+                    // Assuming entry won't change from 'instance' or 'promise' to 'binding', init should be defined at this point
+                    let output = init!.init()
+                    if (!this.sync && isPromise(output)) {
+                        entry.value = { promise: output }
+                        output.then(x => {
+                            this.sync = true
+                            entry.value = { instance: x }
+                        })
+                    } else {
+                        this.sync = true
+                        entry.value = { instance: output as T }
+                    }
+                    return output
+                } finally {
+                    init = null
+                }
             }
-            // Since there's an instance available, we don't need deps anymore
-            deps = null
-            return entry.value.instance
         }
+
+        return provider as Initializer<T>
     }
 
     private _getClassTypKey<T>(cls: InjectableClass<T>): TypeKey<T> {
@@ -253,90 +309,114 @@ export class Container<P> implements _Container<P> {
         }
     }
 
-    private _getClassProvider<T>(cls: InjectableClass<T>): (() => T) | InjectError {
+    private _getClassProvider<T>(cls: InjectableClass<T>): Initializer<T> | InjectError {
         return this._getTypeKeyProvider(this._getClassTypKey(cls))
     }
 
     // Returns a provider for the given `DependencyKey`, or an error if any of its transitive dependencies are not provided.
-    private _getProvider<K extends AnyKey>(deps: K): (() => ContainerActual<K, P>) | InjectError {
+    private _getProvider<K extends AnyKey>(deps: K): Initializer<ContainerActual<K, P>> | InjectError {
         type T = ContainerActual<K, P>
 
-        if (deps == null) return () => deps as T
-        if (Object.is(deps, Container.Key)) return () => this as T
-        if (TypeKey.isTypeKey(deps)) return this._getTypeKeyProvider(deps as TypeKey<T>) as () => T
+        if (deps == null) return { sync: true, init: () => deps as T }
+        if (Object.is(deps, Container.Key)) return { sync: true, init: () => this as T }
+        if (TypeKey.isTypeKey(deps)) return this._getTypeKeyProvider(deps as TypeKey<T>) as Initializer<T>
         if (deps instanceof BaseKey) return deps.init(this._getProvider(deps.inner))
-        if (typeof deps == 'function') return this._getClassProvider(deps as InjectableClass<T>) as () => T
+        if (typeof deps == 'function') return this._getClassProvider(deps as InjectableClass<T>)
         const arrayLength = deps instanceof Array ? deps.length : null
 
         type _K = NonNullable<K>
         type _T = { [X in keyof _K]: ContainerActual<_K[X], P> }
         let _deps = deps as { [X in keyof _K]: _K[X] & DependencyKey<_T[X]> }
 
-        const providers: { [X in keyof _K]?: () => ContainerActual<_K[X], P> } = {}
+        const providers: { [X in keyof _K]?: Initializer<ContainerActual<_K[X], P>> } = arrayLength == null ? {} : new Array(arrayLength) as any
+        let allSync = true
 
         let failed = false
         const errors: { [X in keyof _K]?: InjectError } = {}
-
-        // Cast this to StructuredKey<T> to discard the [k: keyof any] signature
 
         for (let prop in _deps) {
             const provider = this._getProvider(_deps[prop])
             if (provider instanceof InjectError) {
                 failed = true
                 errors[prop] = provider
-            } else {
+            } else if (!failed) {
                 providers[prop] = provider
+                allSync = allSync && !!provider.sync
             }
         }
 
         if (failed) return new InjectPropertyError(errors)
 
-        return () => {
-            const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
+        if (allSync) return {
+            sync: true, init: () => {
+                const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
 
-            for (let prop in providers) {
-                out[prop] = providers[prop]!()
+                for (let prop in providers) {
+                    out[prop] = providers[prop]!.init() as typeof out[keyof _K]
+                }
+
+                return out as T
             }
+        }
 
-            return out as T
+        return {
+            sync: false, init: async () => {
+                const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
+
+                for (let prop in providers) {
+                    out[prop] = await providers[prop]!.init()
+                }
+
+                return out as T
+            }
         }
     }
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     provide<
-        K extends TypeKey<any> | InjectableClass<any>, SrcK extends AnyKey,
+        K extends TypeKey<any> | InjectableClass<any>,
+        SrcK extends AnyKey = any,
+        D = DepsOf<SrcK>,
+        Sync = RequireSync<D>,
         S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
     >(
         key: K,
         ...args: [
             ...scope: [scope: S] | [],
-            ...init: [BaseKey<Actual<K>, SrcK, any>] | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
+            ...init:
+            | [BaseKey<Actual<K>, any, D, P, Sync>]
+            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
         ]
-    ): Container<Provide<P, DepPair<K, S | DepsOf<SrcK>>>> {
+    ): Container<Provide<
+        P,
+        | DepPair<K, S | D>
+        | (unknown extends Sync ? never : DepPair<IsSync<K>, Sync>)
+    >> {
         type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
         const scope = Scope.isScope(args[0]) ? args[0] : key.scope
         let entry: Entry<T, P, AnyKey>
 
         if (typeof args[args.length - 1] == 'function') {
+            const deps = args[args.length - 2] as SrcK
+            const init = args[args.length - 1] as (deps: ContainerActual<SrcK, P>) => T
             entry = {
                 value: {
-                    deps: args[args.length - 2] as AnyKey,
-                    init: args[args.length - 1] as (deps: any) => T,
+                    binding: Inject.map(deps, init),
                     scope,
                 }
             }
         } else {
-            const deps = args[args.length - 1] as BaseKey<T, SrcK, any>
-            if (deps instanceof Inject.Value) {
+            const binding = args[args.length - 1] as BaseKey<T, SrcK, any>
+            if (binding instanceof Inject.Value) {
                 entry = {
-                    value: { instance: deps.instance }
+                    value: { instance: binding.instance }
                 }
             } else {
                 entry = {
                     value: {
-                        deps,
-                        init: deps => deps,
+                        binding,
+                        scope,
                     }
                 }
             }
@@ -347,8 +427,31 @@ export class Container<P> implements _Container<P> {
         return this as any
     }
 
+    provideAsync<
+        K extends TypeKey<any> | InjectableClass<any>,
+        SrcK extends AnyKey = any,
+        D = DepsOf<SrcK>,
+        Sync = RequireSync<D>,
+        S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
+    >(
+        key: K,
+        ...args: [
+            ...scope: [scope: S] | [],
+            ...init:
+            | [BaseKey<Actual<K> | Promise<Actual<K>>, any, D, P, Sync>]
+            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
+        ]
+    ): Container<Provide<
+        P,
+        | DepPair<K, S | D | AsyncScope>
+        | (unknown extends Sync ? never : DepPair<IsSync<K>, Sync>)
+    >> {
+        this.provide(key as any, ...args)
+        return this as any
+    }
+
     /** Registers 'key' to provide the given `instance`. */
-    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<Provide<P, DepPair<K, never>>> {
+    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>> {
         type T = Actual<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
         this._setKeyProvider(_key, { value: { instance } })
@@ -366,7 +469,21 @@ export class Container<P> implements _Container<P> {
         if (provider instanceof InjectError) {
             throw provider
         }
-        return provider()
+        if (!provider.sync) {
+            throw new DependencyNotSyncError(deps)
+        }
+        return provider.init()
+    }
+
+    readonly requestAsync = function <
+        K extends AnyKey,
+        Th extends CanRequest<P | DepPair<AsyncScope>, K>,
+    >(this: Th, deps: K): Promise<ContainerActual<K, P>> {
+        const provider = this._getProvider(deps)
+        if (provider instanceof InjectError) {
+            throw provider
+        }
+        return Promise.resolve(provider.init())
     }
 
     /** Returns a child of this container, after executing `f` with it. */

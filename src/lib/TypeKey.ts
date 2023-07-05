@@ -1,5 +1,6 @@
 import { Inject, Provide, Scope } from "."
-import { Container, InjectError, } from './Container'
+import { BaseKey } from "./BaseKey"
+import { Container, } from './Container'
 import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
 
 /**
@@ -28,14 +29,14 @@ import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
  */
 export interface InjectableClass<T> extends Class<T> {
     readonly scope?: Scope
-    readonly inject?: Inject.Binding<T, any>
+    readonly inject?: HasBaseKeySymbol<T> | (() => HasBaseKeySymbol<T>)
 }
 
 export interface ClassWithoutDefault<T> extends InjectableClass<T> {
     readonly inject?: never
 }
-export interface ClassWithDefault<T, D extends Dependency> extends InjectableClass<T> {
-    readonly inject: Inject.Binding<T, D>
+export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
+    readonly inject: HasBaseKeySymbol<T, D, Sync> | (() => HasBaseKeySymbol<T, D, Sync>)
 }
 
 interface OnlyObject<out T = unknown> {
@@ -58,10 +59,13 @@ export type ArrayKey<T, D extends Dependency> =
 
 /** A structured set of type keys to produce type `T`. */
 export type StructuredKey<T, D extends Dependency = any> = ObjectKey<T, D> | ArrayKey<T, D>
-/** A dependency key that, when requested, resolves to a value of type `T`. */
-export type DependencyKey<T, D extends Dependency = any> = AnyKey & (
+export type SimpleKey<T, D extends Dependency = any> =
     | BaseTypeKey<T>
     | HasBaseKeySymbol<T, D>
+
+/** A dependency key that, when requested, resolves to a value of type `T`. */
+export type DependencyKey<T, D extends Dependency = any> = AnyKey & (
+    | SimpleKey<T, D>
     | InjectableClass<T>
     | StructuredKey<T, D>
     | (T extends (null | undefined | void) ? T : never)
@@ -82,10 +86,10 @@ interface HasTypeKeySymbol<out T> extends HasAbstractKeySymbol<T> {
     readonly [_typeKeySymbol]: readonly [T] | null
 }
 
-const _baseKeySymbol = Symbol()
+export const _baseKeySymbol = Symbol()
 
-interface HasBaseKeySymbol<out T, D = any> extends HasAbstractKeySymbol<T> {
-    readonly [_baseKeySymbol]: readonly [T, D] | null
+export interface HasBaseKeySymbol<out T, D = any, Sync = any> extends HasAbstractKeySymbol<T> {
+    readonly [_baseKeySymbol]: readonly [T, D, Sync] | null
 }
 
 /** The actual type that a dependency key of type `D` resolves to. */
@@ -118,6 +122,7 @@ type Leaves<T> =
     T
 
 type ContainerTransform<T, P> =
+    [P] extends [never] ? T :
     Container<any> extends Leaves<T> ? (
         T extends [] ? [] :
         T extends readonly [infer A, ...infer B] ? [ContainerTransform<A, P>, ...ContainerTransform<B, P>] :
@@ -131,18 +136,18 @@ type ContainerTransform<T, P> =
 
 export type ContainerActual<K, P> = ContainerTransform<Actual<K>, P>
 
+abstract class UnableToResolve<in out K> {
+    private k!: K
+}
+
 export type DepsOf<K> =
+    AnyKey extends K ? (Dependency & UnableToResolve<K>) :
     K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
     K extends DependencyKey<infer _T, never> ? never :
     K extends DependencyKey<infer _T, infer D> ? D :
     K extends readonly (infer T)[] ? DepsOf<T> :
     K extends OnlyObject ? DepsOf<K[keyof K]> :
-    Dependency
-namespace OperatorSymbols {
-    export const Lazy = Symbol()
-    export const Provider = Symbol()
-    export const Optional = Symbol()
-}
+    Dependency & UnableToResolve<K>
 
 // Use this to prevent library consumers from generating types equivalent to `AbstractKey`.
 const _abstractKeySymbol: unique symbol = Symbol()
@@ -150,36 +155,45 @@ const _abstractKeySymbol: unique symbol = Symbol()
 /** Implementation detail--extend `BaseKey` instead. */
 export abstract class AbstractKey<out T> implements HasAbstractKeySymbol<T> {
     readonly [_abstractKeySymbol]: readonly [T] | null = null
-    private [OperatorSymbols.Lazy]?: Inject.GetLazy<any>
     /** Requests a function returning a lazily-computed value of `T`. */
-    Lazy = function <Th extends AbstractKey<any> & AnyKey>(this: Th): Inject.GetLazy<Th> {
-        return this[OperatorSymbols.Lazy] ??= Inject.lazy<Th>(this)
+    Lazy = function <Th extends AnyKey>(this: Th): Inject.GetLazy<Th> {
+        return Inject.lazy<Th>(this)
     }
 
-    private [OperatorSymbols.Provider]?: Inject.GetProvider<any>
     /** Requests a function returning a value of `T`. */
-    Provider = function <Th extends AbstractKey<T> & AnyKey>(this: Th): Inject.GetProvider<Th> {
-        return this[OperatorSymbols.Provider] ??= Inject.provider(this)
+    Provider = function <Th extends AnyKey>(this: Th): Inject.GetProvider<Th> {
+        return Inject.provider(this)
     }
 
-    private [OperatorSymbols.Optional]?: Inject.Optional<any>
     /** Requests a value of type `T` if provided, otherwise `undefined`. */
-    Optional = function <Th extends AbstractKey<T> & AnyKey>(this: Th): Inject.Optional<Th> {
-        return this[OperatorSymbols.Optional] ??= Inject.optional(this)
+    Optional = function <Th extends AnyKey>(this: Th): Inject.Optional<Th> {
+        return Inject.optional(this)
     }
 
     Build = function <
-        Th extends DependencyKey<(...args: Args) => Out>,
+        Th extends SimpleKey<(...args: Args) => Out>,
         Args extends any[],
-        Out = Th extends AbstractKey<(...args: Args) => infer O> ? O : never,
+        Out = Th extends SimpleKey<(...args: Args) => infer O> ? O : never,
     >(this: Th, ...args: Args): Inject.Build<Th, Args, Out> {
         return Inject.build(this, ...args)
+    }
+
+    Map = function <Th extends AnyKey, U, P = never>(this: Th, transform: (x: ContainerActual<Th, P>) => U): Inject.Map<U, Th, P> {
+        return Inject.map(this, transform)
     }
 }
 
 type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
-export type Dependency = Scope | HasTypeKeySymbol<any>
+const _isSyncSymbol = Symbol()
+
+export interface IsSync<in out K> {
+    [_isSyncSymbol]: K
+}
+
+export type RequireSync<D> = D extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<D> : never
+
+export type Dependency = Scope | HasTypeKeySymbol<any> | IsSync<any> | PrivateConstruct
 
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
@@ -198,7 +212,7 @@ export interface TypeKey<out T = any, Def extends BaseKey<T, any, any> = any> ex
     readonly keyTag: symbol
 }
 
-export interface BaseTypeKeyWithDefault<out T, D> extends BaseTypeKey<T, HasBaseKeySymbol<T, D>> { }
+export interface BaseTypeKeyWithDefault<out T, D, Sync> extends BaseTypeKey<T, HasBaseKeySymbol<T, D, Sync>> { }
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
@@ -275,23 +289,4 @@ export function FactoryKey<
         return TypeKey<BaseKey<(...args: Args) => T, K>>({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
     }
     return TypeKey()
-}
-
-/** A key that, upon request,transforms a provider for `K` into a provider of `T`. */
-export abstract class BaseKey<
-    out T = any,
-    out K extends AnyKey = any,
-    D = DepsOf<K>,
-> extends AbstractKey<T> implements HasBaseKeySymbol<T, D> {
-    readonly [_baseKeySymbol]: readonly [T, D] | null = null
-    /** This key determines the dependencies that will be passed to `this.init()`. */
-    readonly inner: K
-
-    constructor(inner: K) {
-        super()
-        this.inner = inner
-    }
-
-    /** Given a provide of `D` or an error, return a provider of `T` or an error. */
-    abstract init(deps: (() => Actual<K>) | InjectError): (() => T) | InjectError
 }

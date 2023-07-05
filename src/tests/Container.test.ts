@@ -1,6 +1,5 @@
 import { Actual, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, Container, ContainerActual, DependencyKey, DepsOf, Inject, InjectableClass, Module, Scope, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
 
-
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
 class ArrayKey extends TypeKey<string[]>() { static readonly keyTag = Symbol() }

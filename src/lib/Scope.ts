@@ -1,7 +1,6 @@
 
 /** Represents a scope for which certain dependencies are provided. */
 
-
 const MISSING_SCOPE_TAG = 'add `static readonly [scopeTag] = Symbol()` to ScopeClass implementation' as const
 
 export function Scope() {
@@ -25,4 +24,3 @@ export namespace Scope {
 
 /** The default scope for top-level containers. */
 export class Singleton extends Scope() { static readonly scopeTag = Symbol(); }
-

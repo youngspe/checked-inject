@@ -71,3 +71,68 @@ export function asMixinClass<
         }
     })
 }
+
+export type AwaitTransform<T> =
+    T extends readonly [] ? [] :
+    T extends readonly [infer A, ...infer B] ? [AwaitTransform<A>, ...AwaitTransform<B>] :
+    T extends readonly (infer U)[] ? AwaitTransform<U>[] :
+    T extends PromiseLike<infer U> ? AwaitTransform<Awaited<U>> :
+    T extends object ? { [X in keyof T]: AwaitTransform<T> } :
+    Awaited<T>
+
+export async function awaitTransform<T>(input: T): Promise<AwaitTransform<T>> {
+    const target = await input
+    if (target == null) return target as AwaitTransform<T>
+    if (target instanceof Array) return await Promise.all(target) as AwaitTransform<T>
+
+    if (typeof target == 'object') {
+        const output: any = {}
+        for (let key of Reflect.ownKeys(target)) {
+            output[key] = await target[key as keyof Awaited<T>]
+        }
+    }
+
+    return target as AwaitTransform<T>
+}
+
+
+export type Initializer<T, Arg = void> = Initializer.Sync<T, Arg> | Initializer.Async<T, Arg>
+
+export namespace Initializer {
+    export interface Sync<T, in Arg = void> extends Base<T, Arg> {
+        sync: true
+        init(arg: Arg): T
+    }
+    export interface Async<T, in Arg = void> extends Base<T, Arg> {
+        sync?: false
+    }
+
+    export interface Base<T, in Arg = void> {
+        sync?: boolean
+        init(arg: Arg): T | Promise<T>
+    }
+}
+
+export function isObject(x: unknown): x is object {
+    return x !== null && (typeof x == 'object' || typeof x == 'function')
+}
+
+export function isPromise<T>(x: T | PromiseLike<T>): x is PromiseLike<T> {
+    return isObject(x) && 'then' in x && typeof x.then == 'function'
+}
+
+type MaybePromiseThen<T, U> =
+    T extends PromiseLike<infer _T> ? U extends PromiseLike<infer _U> ? U : Promise<U> :
+    U
+
+export function maybePromiseThen<T, U, T1 extends T | Promise<T>>(x: T1, f: (x: T) => U): MaybePromiseThen<T, U>
+export function maybePromiseThen<T, U>(x: T | Promise<T>, f: (x: T) => U | Promise<U>): U | Promise<U> {
+    if (isPromise(x)) {
+        return x.then(f)
+    }
+    return f(x as T)
+}
+
+export function nullable<T>(x: T): T | null {
+    return x
+}
