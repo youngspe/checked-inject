@@ -1,4 +1,4 @@
-import { AsyncScope, DepsOf, InjectError, DependencyNotSyncError } from "."
+import { AsyncScope, DepsOf, InjectError, DependencyNotSyncError, ProvideGraph } from "."
 import { Scope } from "./Scope"
 import { Container } from "./Container"
 import { ContainerActual, DependencyKey, Actual, TypeKey, AnyKey, Dependency, IsSync, RequireSync } from "./TypeKey"
@@ -27,7 +27,7 @@ export namespace Inject {
         return new _Value(value)
     }
 
-    export abstract class Map<T, K extends AnyKey, P = never> extends BaseKey<T, K, DepsOf<K>, P> {
+    export abstract class Map<T, K extends AnyKey, P extends ProvideGraph = never> extends BaseKey<T, K, DepsOf<K>, P> {
         private readonly _transform: (deps: ContainerActual<K, P>) => T
 
         constructor(src: K, transform: (deps: ContainerActual<K, P>) => T) {
@@ -48,12 +48,12 @@ export namespace Inject {
         }
     }
 
-    class _Map<T, K extends AnyKey, P = never> extends Map<T, K, P> { }
+    class _Map<T, K extends AnyKey, P extends ProvideGraph> extends Map<T, K, P> { }
 
     export function map<
         T,
         K extends AnyKey,
-        P = never,
+        P extends ProvideGraph = never,
     >(src: K, transform: (deps: ContainerActual<K, P>) => T): Map<T, K, P> {
         return new _Map(src, transform)
     }
@@ -68,11 +68,15 @@ export namespace Inject {
         return new From(src)
     }
 
-    export function construct<T, K extends AnyKey[], P = never>(ctor: new (...args: ContainerActual<K, P>) => T, ...deps: K) {
+    export function construct<
+        T, K extends AnyKey[], P extends ProvideGraph = never,
+    >(ctor: new (...args: ContainerActual<K, P>) => T, ...deps: K) {
         return map<T, K, P>(deps, deps => new ctor(...deps))
     }
 
-    export function call<T, K extends AnyKey[], P = never>(init: (...args: ContainerActual<K, P>) => T, ...deps: K) {
+    export function call<
+        T, K extends AnyKey[], P extends ProvideGraph = never,
+    >(init: (...args: ContainerActual<K, P>) => T, ...deps: K) {
         return map<T, K, P>(deps, deps => init(...deps))
     }
 
@@ -168,16 +172,25 @@ export namespace Inject {
         return new _Async(inner)
     }
 
-    export abstract class SubcomponentDefinition<Args extends any[], P> extends Map<(...args: Args) => Container<P>, typeof Container.Key> {
+    export abstract class SubcomponentDefinition<
+        Args extends any[],
+        P extends ProvideGraph,
+    > extends Map<(...args: Args) => Container<P>, typeof Container.Key> {
         constructor(f: (ct: Container<never>, ...args: Args) => Container<P>) {
             super(Container.Key, ct => (...args) => f(ct.createChild(), ...args))
         }
     }
 
-    class _SubcomponentDefinition<Args extends any[], P> extends SubcomponentDefinition<Args, P> { }
+    class _SubcomponentDefinition<
+        Args extends any[],
+        P extends ProvideGraph,
+    > extends SubcomponentDefinition<Args, P> { }
 
 
-    export function subcomponent<Args extends any[], P>(f: (ct: Container<never>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {
+    export function subcomponent<
+        Args extends any[],
+        P extends ProvideGraph,
+    >(f: (ct: Container<never>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {
         return new _SubcomponentDefinition(f)
     }
 }

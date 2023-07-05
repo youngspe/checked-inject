@@ -1,4 +1,4 @@
-import { Container, InjectError } from './Container';
+import { Container, InjectError, ProvideGraph } from './Container';
 import { AnyKey, DepsOf, AbstractKey, HasBaseKeySymbol, _baseKeySymbol, Actual, ContainerActual, Dependency, RequireSync } from "./TypeKey";
 import { Initializer } from './_internal';
 
@@ -7,9 +7,9 @@ import { Initializer } from './_internal';
 export abstract class BaseKey<
     out T = any,
     out K extends AnyKey = any,
-    D = DepsOf<K>,
-    P = never,
-    Sync = RequireSync<D>,
+    D extends Dependency = DepsOf<K>,
+    P extends ProvideGraph = never,
+    Sync extends Dependency = RequireSync<D>,
 > extends AbstractKey<T> implements HasBaseKeySymbol<T, D, Sync> {
     readonly [_baseKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
@@ -25,5 +25,5 @@ export abstract class BaseKey<
 }
 
 export namespace BaseKey {
-    export interface Any<out T = any> extends BaseKey<T, any, any, any> {}
+    export interface Any<out T = any> extends BaseKey<T, any, any, any> { }
 }

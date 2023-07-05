@@ -1,4 +1,4 @@
-import { Inject, Provide, Scope } from "."
+import { Inject, Provide, ProvideGraph, Scope } from "."
 import { BaseKey } from "./BaseKey"
 import { Container, } from './Container'
 import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
@@ -93,7 +93,7 @@ export interface HasBaseKeySymbol<out T, D = any, Sync = any> extends HasAbstrac
 }
 
 /** The actual type that a dependency key of type `D` resolves to. */
-export type Actual<K> =
+export type Actual<K extends AnyKey> =
     K extends DependencyKey<infer _T> ? (
         K extends HasAbstractKeySymbol<infer T> ? T :
         K extends InjectableClass<infer T> ? T :
@@ -101,19 +101,19 @@ export type Actual<K> =
         _T
     ) :
     K extends readonly any[] ? ArrayActual<K> :
-    K extends OnlyObject ? ObjectActual<K> :
+    K extends OnlyObject<AnyKey> ? ObjectActual<K> :
     K extends undefined ? undefined :
     K extends null ? null :
     K extends void ? void :
     never
 
-type ArrayActual<K> =
+type ArrayActual<K extends readonly AnyKey[]> =
     K extends [] ? [] :
-    K extends readonly [infer A, ...infer B] ? [Actual<A>, ...ArrayActual<B>] :
-    K extends readonly (infer A)[] ? Actual<A>[] :
+    K extends readonly [infer A extends AnyKey, ...infer B extends AnyKey[]] ? [Actual<A>, ...ArrayActual<B>] :
+    K extends readonly (infer A extends AnyKey)[] ? Actual<A>[] :
     never
 
-type ObjectActual<K> = { [X in keyof K]: Actual<K[X]> }
+type ObjectActual<K extends OnlyObject<AnyKey>> = { [X in keyof K]: Actual<K[X]> }
 
 type Leaves<T> =
     T extends (OnlyObject<infer U> | (infer U)[]) ? Leaves<U> :
@@ -121,7 +121,7 @@ type Leaves<T> =
     T extends (...args: any[]) => infer U ? Leaves<U> :
     T
 
-type ContainerTransform<T, P> =
+type ContainerTransform<T, P extends ProvideGraph> =
     [P] extends [never] ? T :
     Container<any> extends Leaves<T> ? (
         T extends [] ? [] :
@@ -134,7 +134,7 @@ type ContainerTransform<T, P> =
         T
     ) : T
 
-export type ContainerActual<K, P> = ContainerTransform<Actual<K>, P>
+export type ContainerActual<K extends AnyKey, P extends ProvideGraph> = ContainerTransform<Actual<K>, P>
 
 abstract class UnableToResolve<in out K> {
     private k!: K
@@ -178,7 +178,11 @@ export abstract class AbstractKey<out T> implements HasAbstractKeySymbol<T> {
         return Inject.build(this, ...args)
     }
 
-    Map = function <Th extends AnyKey, U, P = never>(this: Th, transform: (x: ContainerActual<Th, P>) => U): Inject.Map<U, Th, P> {
+    Map = function <
+        Th extends AnyKey,
+        U,
+        P extends ProvideGraph = never,
+    >(this: Th, transform: (x: ContainerActual<Th, P>) => U): Inject.Map<U, Th, P> {
         return Inject.map(this, transform)
     }
 }
@@ -187,18 +191,18 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
 const _isSyncSymbol = Symbol()
 
-export interface IsSync<in out K> {
+export interface IsSync<in out K extends HasTypeKeySymbol<any> | PrivateConstruct> {
     [_isSyncSymbol]: K
 }
 
-export type RequireSync<D> = D extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<D> : never
+export type RequireSync<D extends Dependency> = D extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<D> : never
 
 export type Dependency = Scope | HasTypeKeySymbol<any> | IsSync<any> | PrivateConstruct
 
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
 
-export interface BaseTypeKey<out T, Def = any> extends HasTypeKeySymbol<T> {
+export interface BaseTypeKey<out T, Def extends HasBaseKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: Scope
     readonly name: string
@@ -208,7 +212,7 @@ export interface BaseTypeKey<out T, Def = any> extends HasTypeKeySymbol<T> {
     readonly defaultInit?: Def
 }
 
-export interface TypeKey<out T = any, Def extends BaseKey<T, any, any> = any> extends BaseTypeKey<T, Def>, AbstractKey<T> {
+export interface TypeKey<out T = any, Def extends BaseKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey<T> {
     readonly keyTag: symbol
 }
 
@@ -216,7 +220,7 @@ export interface BaseTypeKeyWithDefault<out T, D, Sync> extends BaseTypeKey<T, H
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
-interface TypeKeyClass<out T, Def> extends
+interface TypeKeyClass<out T, Def extends HasBaseKeySymbol<T>> extends
     AbstractKey<T>,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }
