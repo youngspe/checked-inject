@@ -1,8 +1,8 @@
 import { BaseKey, DependencyKey, InjectableClass } from "."
 import { Scope, Singleton } from './Scope'
 import { Inject } from "./Inject"
-import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, Dependency, DepsOf, IsSync, RequireSync, TypeKey, } from "./TypeKey"
-import { Initializer, isPromise, nullable } from "./_internal"
+import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
+import { Initializer, PrivateConstruct, isPromise, nullable } from "./_internal"
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -84,48 +84,73 @@ interface Entry<T, P extends ProvideGraph, K extends AnyKey> {
 
 const _classTypeKey = Symbol()
 
-type _UnresolvedKeys<AllKeys extends Dependency, Solved extends Dependency, K extends Dependency> =
-    K extends AllKeys ? Exclude<K, Solved> :
+type _UnresolvedKeys<P extends ProvideGraph, AllKeys extends Dependency, Solved extends Dependency, K extends Dependency> =
+    [Dependency] extends [K] ? UnableToResolve<['UnresolvedKeys', K]> :
+    K extends Solved ? never :
+    K extends AllKeys ? (
+        P extends DepPair<K, infer X> ? _UnresolvedKeys<P, AllKeys, Solved, X> : never
+    ) :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
     K extends (
         | BaseTypeKeyWithDefault<infer _T, infer D, any>
         | ClassWithDefault<infer _T, infer D, any>
     ) ? _UnresolvedKeys<
+        P,
         AllKeys,
         Solved,
         D | (K extends { scope: infer Scp extends Scope } ? Scp : never)
     > :
-    K extends (
-        | IsSync<BaseTypeKeyWithDefault<infer _T, any, infer Sync>>
-        | IsSync<ClassWithDefault<infer _T, any, infer Sync>>
-    ) ? _UnresolvedKeys<AllKeys, Solved, Sync> :
+    K extends IsSync<infer K2> ? (
+        K2 extends AllKeys ? K :
+        K2 extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? never :
+        K2 extends (
+            | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
+            | ClassWithDefault<infer _T, any, infer Sync>
+        ) ? _UnresolvedKeys<P, AllKeys, Solved, Sync> :
+        // If a dependency can't be resolved, it may as well be sync
+        never
+    ) :
     K
 
-export type UnresolvedKeys<P extends ProvideGraph, K extends AnyKey> = _UnresolvedKeys<Keys<P>, SimplifiedDeps<P>, DepsOf<K>>
+export type UnresolvedKeys<
+    P extends ProvideGraph,
+    K extends AnyKey,
+    Sync extends Dependency = IsSyncDepsOf<K>,
+> = _UnresolvedKeys<P, Keys<P>, SimplifiedDeps<P>, DepsOf<K> | Sync>
 
-const _requestFailedSymbol = Symbol()
+const unresolved = Symbol()
 
 export interface RequestFailed<K> {
-    [_requestFailedSymbol]: K
+    [unresolved]: [(K extends any ? [K] : never)[0]]
 }
 
-export type CanRequest<P extends ProvideGraph, K extends AnyKey> =
+export type CanRequest<
+    P extends ProvideGraph,
+    K extends AnyKey,
+    Sync extends Dependency = IsSyncDepsOf<K>,
+> =
     & Container<P>
-    & ([UnresolvedKeys<P, K>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
+    & ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
 type Keys<P extends ProvideGraph> = P extends DepPair<infer K, infer _D> ? K : never
 
 type DepsForKey<P extends ProvideGraph, K extends Dependency> =
+    [Dependency] extends [K] ? UnableToResolve<['DepsForKey', K]> :
     K extends Keys<P> ? (P extends DepPair<K, infer D> ? D : never) :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
     K extends (
         | BaseTypeKeyWithDefault<infer _T, infer D, any>
         | ClassWithDefault<infer _T, infer D, any>
     ) ? D :
-    K extends (
-        | IsSync<BaseTypeKeyWithDefault<infer _T, any, infer Sync>>
-        | IsSync<ClassWithDefault<infer _T, any, infer Sync>>
-    ) ? Sync :
+    K extends IsSync<infer K2> ? (
+        K2 extends Keys<P> ? K :
+        K2 extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? never :
+        K2 extends (
+            | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
+            | ClassWithDefault<infer _T, any, infer Sync>
+        ) ? Sync :
+        never
+    ) :
     K
 
 export type Provide<Old extends ProvideGraph, New extends ProvideGraph> =
@@ -137,7 +162,7 @@ type SimplifyStep<P extends ProvideGraph, P2 extends ProvideGraph = P> =
         K extends D ? never : DepPair<K, D extends any ? DepsForKey<P2, D> : never>
     ) : never
 
-type SolvedKeys<Deps> = Deps extends DepPair<infer K, never> ? K : never
+type SolvedKeys<P extends ProvideGraph> = P extends DepPair<infer K, never> ? K : never
 
 export type SimplifiedDeps<P extends ProvideGraph> = [SimplifyStep<P>] extends [infer S extends ProvideGraph] ? (
     [P, S] extends [S, P] ? SolvedKeys<S> : SimplifiedDeps<S>
@@ -145,22 +170,20 @@ export type SimplifiedDeps<P extends ProvideGraph> = [SimplifyStep<P>] extends [
 
 const _depsTag = Symbol()
 
-interface DepPair<out K extends Dependency, in D extends Dependency = never> {
-    (d: D): K
+interface DepPair<out K extends Dependency, D extends Dependency> {
+    d(d: D | 'never'): D
+    k: K
 }
 
-export interface ProvideGraph extends DepPair<any> { }
+export interface ProvideGraph extends DepPair<Dependency, any> { }
 
 interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
 }
 
-class _AsyncScope extends Scope() { static readonly scopeTag = Symbol() }
-export type AsyncScope = typeof _AsyncScope
-
 /** The dependency injection container for `structured-injection`. */
 export class Container<P extends ProvideGraph> implements _Container<P> {
-    [_requestFailedSymbol]: unknown
+    [unresolved]!: ['missing dependencies:']
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
@@ -174,9 +197,10 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<
-        | DepPair<typeof Singleton>
-        | DepPair<typeof Container.Key>
-        | (S extends any ? DepPair<S> : never)
+        | DepPair<typeof Singleton, never>
+        | DepPair<typeof Container.Key, never>
+        | DepPair<IsSync<typeof Container.Key>, never>
+        | (S extends any ? DepPair<S, never> : never)
     > {
         let { scope = [] } = options
         let scopeWithSingleton = scope instanceof Array ? [Singleton, ...scope] : [Singleton, scope]
@@ -391,7 +415,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ]
     ): Container<Provide<
         P,
-        | DepPair<K, S | D>
+        | DepPair<K, D | (Scope extends S ? never : S)>
         | (unknown extends Sync ? never : DepPair<IsSync<K>, Sync>)
     >> {
         type T = Actual<K>
@@ -433,21 +457,16 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         K extends TypeKey<any> | InjectableClass<any>,
         SrcK extends AnyKey = any,
         D extends Dependency = DepsOf<SrcK>,
-        Sync extends Dependency = RequireSync<D>,
         S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
     >(
         key: K,
         ...args: [
             ...scope: [scope: S] | [],
             ...init:
-            | [BaseKey<Actual<K> | Promise<Actual<K>>, any, D, P, Sync>]
-            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
+            | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
+            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>],
         ]
-    ): Container<Provide<
-        P,
-        | DepPair<K, S | D | AsyncScope>
-        | (unknown extends Sync ? never : DepPair<IsSync<K>, Sync>)
-    >> {
+    ): Container<Provide<P, DepPair<K, S | D>>> {
         this.provide(key as any, ...args)
         return this as any
     }
@@ -460,7 +479,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return this as any
     }
 
-    addScope<S extends Scope>(...scope: S[]): Container<P | (S extends any ? DepPair<S> : never)> {
+    addScope<S extends Scope>(...scope: S[]): Container<P | (S extends any ? DepPair<S, never> : never)> {
         this.scopes.push(...scope)
         return this as any
     }
@@ -479,7 +498,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
 
     readonly requestAsync = function <
         K extends AnyKey,
-        Th extends CanRequest<P | DepPair<AsyncScope>, K>,
+        Th extends CanRequest<P, K, never>,
     >(this: Th, deps: K): Promise<ContainerActual<K, P>> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
@@ -491,15 +510,15 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     /** Returns a child of this container, after executing `f` with it. */
     createChild<S2 extends Scope = never>(
         { scope = [] }: Container.ChildOptions<S2> = {},
-    ): Container<P | (S2 extends any ? DepPair<S2> : never)> {
-        return new Container<P | (S2 extends any ? DepPair<S2> : never)>({ scope, parent: this })
+    ): Container<P | (S2 extends any ? DepPair<S2, never> : never)> {
+        return new Container<P | (S2 extends any ? DepPair<S2, never> : never)>({ scope, parent: this })
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
     createSubcomponent<Args extends any[], P2 extends ProvideGraph = never, S2 extends Scope = never>(
         { scope = [] }: Container.ChildOptions<S2> = {},
         f?: (child: Container<never>, ...args: Args) => Container<P2>,
-    ): Container.Subcomponent<Args, Provide<Provide<P, S2 extends any ? DepPair<S2> : never>, P2>> {
+    ): Container.Subcomponent<Args, Provide<Provide<P, S2 extends any ? DepPair<S2, never> : never>, P2>> {
         return (...args) => {
             const child = new Container<never>({ scope, parent: this })
             return f?.(child, ...args) ?? child as any

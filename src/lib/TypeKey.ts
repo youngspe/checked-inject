@@ -46,28 +46,28 @@ interface OnlyObject<out T = unknown> {
 interface OnlyObjectKey extends OnlyObject<AnyKey> { }
 
 /** An object representing a structured set of type keys to produce type `T`. */
-export type ObjectKey<T, D extends Dependency> =
+export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> =
     T extends OnlyObject ? OnlyObjectKey & { readonly [K in keyof T]: DependencyKey<T[K], D> } :
     never
 
 /** An array representing a structured set of type keys to produce type `T`. */
-export type ArrayKey<T, D extends Dependency> =
-    T extends readonly [infer A, ...infer B] ? [DependencyKey<A, D>, ...ArrayKey<B, D>] :
+export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
+    T extends readonly [infer A, ...infer B] ? [DependencyKey<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
     T extends [] ? [] :
-    T extends readonly any[] ? AnyKey[] & { readonly [K in Extract<keyof T, number>]: DependencyKey<T[K], D> } :
+    T extends readonly any[] ? AnyKey[] & { readonly [K in Extract<keyof T, number>]: DependencyKey<T[K], D, Sync> } :
     never
 
 /** A structured set of type keys to produce type `T`. */
-export type StructuredKey<T, D extends Dependency = any> = ObjectKey<T, D> | ArrayKey<T, D>
-export type SimpleKey<T, D extends Dependency = any> =
+export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> = ObjectKey<T, D, Sync> | ArrayKey<T, D, Sync>
+export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | BaseTypeKey<T>
-    | HasBaseKeySymbol<T, D>
+    | HasBaseKeySymbol<T, D, Sync>
 
 /** A dependency key that, when requested, resolves to a value of type `T`. */
-export type DependencyKey<T, D extends Dependency = any> = AnyKey & (
-    | SimpleKey<T, D>
+export type DependencyKey<T, D extends Dependency = any, Sync extends Dependency = any> = AnyKey & (
+    | SimpleKey<T, D, Sync>
     | InjectableClass<T>
-    | StructuredKey<T, D>
+    | StructuredKey<T, D, Sync>
     | (T extends (null | undefined | void) ? T : never)
 )
 
@@ -136,18 +136,33 @@ type ContainerTransform<T, P extends ProvideGraph> =
 
 export type ContainerActual<K extends AnyKey, P extends ProvideGraph> = ContainerTransform<Actual<K>, P>
 
-abstract class UnableToResolve<in out K> {
-    private k!: K
+export abstract class UnableToResolve<in out K> {
+    private _k!: K
+    constructor(_: never) { }
 }
 
-export type DepsOf<K> =
-    AnyKey extends K ? (Dependency & UnableToResolve<K>) :
+abstract class UnableToResolveIsSync<in out K> {
+    private _s!: K
+}
+
+export type DepsOf<K extends AnyKey> =
+    [AnyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
     K extends DependencyKey<infer _T, never> ? never :
     K extends DependencyKey<infer _T, infer D> ? D :
-    K extends readonly (infer T)[] ? DepsOf<T> :
-    K extends OnlyObject ? DepsOf<K[keyof K]> :
-    Dependency & UnableToResolve<K>
+    K extends readonly (infer X extends AnyKey)[] ? DepsOf<X> :
+    K extends OnlyObject<infer X extends AnyKey> ? DepsOf<X> :
+    UnableToResolve<K>
+
+export type IsSyncDepsOf<K extends AnyKey> =
+    [AnyKey] extends [K] ? UnableToResolve<K> :
+    K extends Scope ? UnableToResolveIsSync<K> :
+    K extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<K> :
+    K extends DependencyKey<infer _T, any, never> ? never :
+    K extends DependencyKey<infer _T, any, infer D> ? D :
+    K extends readonly (infer X extends AnyKey)[] ? IsSyncDepsOf<X> :
+    K extends OnlyObject<infer X extends AnyKey> ? IsSyncDepsOf<X> :
+    UnableToResolveIsSync<K>
 
 // Use this to prevent library consumers from generating types equivalent to `AbstractKey`.
 const _abstractKeySymbol: unique symbol = Symbol()
@@ -191,13 +206,19 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
 const _isSyncSymbol = Symbol()
 
-export interface IsSync<in out K extends HasTypeKeySymbol<any> | PrivateConstruct> {
+export interface IsSync<out K extends HasTypeKeySymbol<any> | PrivateConstruct> {
     [_isSyncSymbol]: K
 }
 
 export type RequireSync<D extends Dependency> = D extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<D> : never
 
-export type Dependency = Scope | HasTypeKeySymbol<any> | IsSync<any> | PrivateConstruct
+export type Dependency =
+    | Scope
+    | HasTypeKeySymbol<any>
+    | IsSync<any>
+    | PrivateConstruct
+    | UnableToResolve<any>
+    | UnableToResolveIsSync<any>
 
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()

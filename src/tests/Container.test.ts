@@ -1,4 +1,4 @@
-import { Actual, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, Container, ContainerActual, DependencyKey, DepsOf, Inject, InjectableClass, Module, Scope, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
+import { Actual, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, Container, ContainerActual, DependencyKey, DepsOf, Inject, InjectableClass, IsSyncDepsOf, Module, Scope, SimplifiedDeps, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
@@ -58,16 +58,17 @@ describe(Container, () => {
 
     test('request optional structured dependencies', () => {
         const target = Container.create()
-
-        const out = target
             .provideInstance(NumberKey, 10)
             .provide(StringKey, {}, () => 'foo')
             .provide(ArrayKey, {}, () => ['a', 'b'])
-            .request({
-                a: NumberKey,
-                b: StringKey,
-                c: { d: ArrayKey, e: BooleanKey.Optional() }
-            })
+
+        target.request(Inject.async(BooleanKey.Optional()))
+
+        const out = target.request({
+            a: NumberKey,
+            b: StringKey,
+            c: { d: ArrayKey, e: BooleanKey.Optional() }
+        })
 
         expect(out).toEqual({
             a: 10,
@@ -167,11 +168,15 @@ describe(Container, () => {
         const parent = Container.create()
             .provide(NumberKey, {}, () => 10)
             .provide(StringKey, {}, () => 'foo')
-            .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
+            .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str]);
 
-        const child1 = parent.createChild({ scope: MyScope }).provide(NumberKey, {}, () => 20)
-        const grandChild1a = child1.createChild().provide(StringKey, {}, () => 'bar')
-        const grandChild1b = child1.createChild().provide(NumberKey, {}, () => 30)
+        const child1 = parent.createChild()
+            .addScope(MyScope)
+            .provide(NumberKey, {}, () => 20)
+        const grandChild1a = child1.createChild()
+            .provide(StringKey, {}, () => 'bar')
+        const grandChild1b = child1.createChild()
+            .provide(NumberKey, {}, () => 30)
 
         const out1 = child1.request(ArrayKey)
 
@@ -179,9 +184,12 @@ describe(Container, () => {
         expect(grandChild1a.request(ArrayKey)).toBe(out1)
         expect(grandChild1b.request(ArrayKey)).toBe(out1)
 
-        const child2 = parent.createChild({ scope: MyScope }).provide(NumberKey, {}, () => 40)
-        const grandChild2a = child2.createChild().provide(StringKey, {}, () => 'baz')
-        const grandChild2b = child2.createChild().provide(NumberKey, {}, () => 50)
+        const child2 = parent.createChild({ scope: MyScope })
+            .provide(NumberKey, {}, () => 40)
+        const grandChild2a = child2.createChild()
+            .provide(StringKey, {}, () => 'baz')
+        const grandChild2b = child2.createChild()
+            .provide(NumberKey, {}, () => 50)
 
         const out2 = grandChild2a.request(ArrayKey)
 
@@ -236,8 +244,6 @@ describe(Container, () => {
         const target = Container.create()
             .provideInstance(NumberKey, 1)
             .provideInstance(StringKey, 'foo')
-
-        type Foo = Actual<typeof CustomKey1>
 
         const out1a = target.request(CustomKey1)
         const out1b = target.request(CustomKey1)

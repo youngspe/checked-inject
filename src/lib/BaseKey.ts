@@ -1,5 +1,5 @@
 import { Container, InjectError, ProvideGraph } from './Container';
-import { AnyKey, DepsOf, AbstractKey, HasBaseKeySymbol, _baseKeySymbol, Actual, ContainerActual, Dependency, RequireSync } from "./TypeKey";
+import { AnyKey, DepsOf, AbstractKey, HasBaseKeySymbol, _baseKeySymbol, Actual, ContainerActual, Dependency, RequireSync, IsSyncDepsOf } from "./TypeKey";
 import { Initializer } from './_internal';
 
 /** A key that, upon request,transforms a provider for `K` into a provider of `T`. */
@@ -9,7 +9,7 @@ export abstract class BaseKey<
     out K extends AnyKey = any,
     D extends Dependency = DepsOf<K>,
     P extends ProvideGraph = never,
-    Sync extends Dependency = RequireSync<D>,
+    Sync extends Dependency = IsSyncDepsOf<K>,
 > extends AbstractKey<T> implements HasBaseKeySymbol<T, D, Sync> {
     readonly [_baseKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */

@@ -7,6 +7,7 @@ export function Scope() {
     abstract class _Scope {
         constructor(..._args: never) { }
         static readonly scopeTag: symbol | typeof MISSING_SCOPE_TAG = MISSING_SCOPE_TAG
+        static readonly inject: null
     }
     return _Scope
 }
@@ -14,6 +15,7 @@ export function Scope() {
 export interface Scope {
     readonly scopeTag: symbol
     readonly name?: string
+    readonly inject: null
 }
 
 export namespace Scope {
