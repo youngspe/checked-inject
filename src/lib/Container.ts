@@ -84,18 +84,23 @@ interface Entry<T, P extends ProvideGraph, K extends AnyKey> {
 
 const _classTypeKey = Symbol()
 
-type _UnresolvedKeys<P extends ProvideGraph, AllKeys extends Dependency, Solved extends Dependency, K extends Dependency> =
+type _UnresolvedKeys<
+    Pairs extends GraphPairs,
+    AllKeys extends Dependency,
+    Solved extends Dependency,
+    K extends Dependency,
+> =
     [Dependency] extends [K] ? UnableToResolve<['UnresolvedKeys', K]> :
     K extends Solved ? never :
-    K extends AllKeys ? (
-        P extends DepPair<K, infer X> ? _UnresolvedKeys<P, AllKeys, Solved, X> : never
-    ) :
+    K extends AllKeys ? ([Pairs] extends [infer P extends GraphPairs] ? (
+        P extends DepPair<K, infer X> ? _UnresolvedKeys<Pairs, AllKeys, Solved, X> : never
+    ) : never) :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
     K extends (
         | BaseTypeKeyWithDefault<infer _T, infer D, any>
         | ClassWithDefault<infer _T, infer D, any>
     ) ? _UnresolvedKeys<
-        P,
+        Pairs,
         AllKeys,
         Solved,
         D | (K extends { scope: infer Scp extends Scope } ? Scp : never)
@@ -106,7 +111,7 @@ type _UnresolvedKeys<P extends ProvideGraph, AllKeys extends Dependency, Solved 
         K2 extends (
             | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
             | ClassWithDefault<infer _T, any, infer Sync>
-        ) ? _UnresolvedKeys<P, AllKeys, Solved, Sync> :
+        ) ? _UnresolvedKeys<Pairs, AllKeys, Solved, Sync> :
         // If a dependency can't be resolved, it may as well be sync
         never
     ) :
@@ -116,7 +121,7 @@ export type UnresolvedKeys<
     P extends ProvideGraph,
     K extends AnyKey,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> = _UnresolvedKeys<P, Keys<P>, SimplifiedDeps<P>, DepsOf<K> | Sync>
+> = _UnresolvedKeys<PairsOf<P>, Keys<P>, SimplifiedDeps<P>, DepsOf<K> | Sync>
 
 const unresolved = Symbol()
 
@@ -132,18 +137,18 @@ export type CanRequest<
     & Container<P>
     & ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
-type Keys<P extends ProvideGraph> = P extends DepPair<infer K, infer _D> ? K : never
+type Keys<P extends ProvideGraph> = PairsOf<P>['key']
 
-type DepsForKey<P extends ProvideGraph, K extends Dependency> =
+type DepsForKey<Pairs extends GraphPairs, K extends Dependency> =
     [Dependency] extends [K] ? UnableToResolve<['DepsForKey', K]> :
-    K extends Keys<P> ? (P extends DepPair<K, infer D> ? D : never) :
+    K extends Pairs['key'] ? (Pairs extends DepPair<K, infer D> ? D : never) :
     K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
     K extends (
         | BaseTypeKeyWithDefault<infer _T, infer D, any>
         | ClassWithDefault<infer _T, infer D, any>
     ) ? D :
     K extends IsSync<infer K2> ? (
-        K2 extends Keys<P> ? K :
+        K2 extends Pairs['key'] ? K :
         K2 extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? never :
         K2 extends (
             | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
@@ -154,17 +159,31 @@ type DepsForKey<P extends ProvideGraph, K extends Dependency> =
     K
 
 export type Provide<Old extends ProvideGraph, New extends ProvideGraph> =
-    | (Old extends DepPair<Keys<New>, any> ? never : Old)
-    | New
+    New extends ChildProvideGraph<infer Parent, infer Pairs> ? ChildProvideGraph<Provide<Old, Parent>, Pairs> :
+    New extends ProvideGraph<infer NewPairs> ? (
+        Old extends ChildProvideGraph<infer Parent, infer OldPairs> ? ChildProvideGraph<
+            Parent,
+            | Exclude<OldPairs, DepPair<Keys<New>, any>>
+            | NewPairs
+        > :
+        Old extends ProvideGraph<infer OldPairs> ? ProvideGraph<
+            | Exclude<OldPairs, DepPair<Keys<New>, any>>
+            | NewPairs
+        > :
+        never
+    ) :
+    never
 
-type SimplifyStep<P extends ProvideGraph, P2 extends ProvideGraph = P> =
-    P extends DepPair<infer K, infer D> ? (
-        K extends D ? never : DepPair<K, D extends any ? DepsForKey<P2, D> : never>
+type SimplifyStep<Pairs extends GraphPairs, Pairs2 extends GraphPairs = Pairs> =
+    Pairs extends DepPair<infer K, infer D> ? (
+        K extends D ? never : DepPair<K, D extends any ? DepsForKey<Pairs2, D> : never>
     ) : never
 
-type SolvedKeys<P extends ProvideGraph> = P extends DepPair<infer K, never> ? K : never
+type SolvedKeys<P extends ProvideGraph> = PairsOf<P> extends infer Pairs ? (
+    Pairs extends DepPair<infer K, never> ? K : never
+) : never
 
-export type SimplifiedDeps<P extends ProvideGraph> = [SimplifyStep<P>] extends [infer S extends ProvideGraph] ? (
+export type SimplifiedDeps<P extends ProvideGraph> = [SimplifyStep<PairsOf<P>>] extends [infer S extends ProvideGraph] ? (
     [P, S] extends [S, P] ? SolvedKeys<S> : SimplifiedDeps<S>
 ) : never
 
@@ -172,10 +191,23 @@ const _depsTag = Symbol()
 
 interface DepPair<out K extends Dependency, D extends Dependency> {
     d(d: D | 'never'): D
-    k: K
+    key: K
+}
+interface GraphPairs extends DepPair<Dependency, any> { }
+
+export interface ProvideGraph<Pairs extends GraphPairs = GraphPairs> {
+    pairs: Pairs
+}
+interface ChildProvideGraph<
+    out Parent extends ProvideGraph,
+    Pairs extends DepPair<Dependency, any> = DepPair<Dependency, any>,
+> extends ProvideGraph<Pairs> {
+    childOf: Parent
 }
 
-export interface ProvideGraph extends DepPair<Dependency, any> { }
+type ParentOf<P extends ProvideGraph> = P extends ChildProvideGraph<infer Parent> ? Parent : never
+type PairsOf<P extends ProvideGraph> = P['pairs']
+
 
 interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
@@ -196,12 +228,12 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<
+    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<ProvideGraph<
         | DepPair<typeof Singleton, never>
         | DepPair<typeof Container.Key, never>
         | DepPair<IsSync<typeof Container.Key>, never>
         | (S extends any ? DepPair<S, never> : never)
-    > {
+    >> {
         let { scope = [] } = options
         let scopeWithSingleton = scope instanceof Array ? [Singleton, ...scope] : [Singleton, scope]
         const newOptions: { scope: Scope[] } = { scope: scopeWithSingleton }
@@ -415,8 +447,10 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ]
     ): Container<Provide<
         P,
-        | DepPair<K, D | (Scope extends S ? never : S)>
-        | (unknown extends Sync ? never : DepPair<IsSync<K>, Sync>)
+        ProvideGraph<
+            | DepPair<K, D | (Scope extends S ? never : S)>
+            | ([Dependency] extends [Sync] ? never : DepPair<IsSync<K>, Sync>)
+        >
     >> {
         type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
@@ -466,20 +500,24 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
             | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
             | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>],
         ]
-    ): Container<Provide<P, DepPair<K, S | D>>> {
+    ): Container<Provide<P, ProvideGraph<DepPair<K, S | D>>>> {
         this.provide(key as any, ...args)
         return this as any
     }
 
     /** Registers 'key' to provide the given `instance`. */
-    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>> {
+    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<
+        Provide<P, ProvideGraph<DepPair<IsSync<K>, never> | DepPair<K, never>>>
+    > {
         type T = Actual<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
         this._setKeyProvider(_key, { value: { instance } })
         return this as any
     }
 
-    addScope<S extends Scope>(...scope: S[]): Container<P | (S extends any ? DepPair<S, never> : never)> {
+    addScope<S extends Scope>(...scope: S[]): Container<
+        Provide<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
+    > {
         this.scopes.push(...scope)
         return this as any
     }
@@ -508,19 +546,16 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild<S2 extends Scope = never>(
-        { scope = [] }: Container.ChildOptions<S2> = {},
-    ): Container<P | (S2 extends any ? DepPair<S2, never> : never)> {
-        return new Container<P | (S2 extends any ? DepPair<S2, never> : never)>({ scope, parent: this })
+    createChild<S2 extends Scope = never>(): Container<ChildProvideGraph<P, S2 extends any ? DepPair<S2, never> : never>> {
+        return new Container({ parent: this })
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
-    createSubcomponent<Args extends any[], P2 extends ProvideGraph = never, S2 extends Scope = never>(
-        { scope = [] }: Container.ChildOptions<S2> = {},
+    createSubcomponent<Args extends any[], P2 extends ProvideGraph = never>(
         f?: (child: Container<never>, ...args: Args) => Container<P2>,
-    ): Container.Subcomponent<Args, Provide<Provide<P, S2 extends any ? DepPair<S2, never> : never>, P2>> {
+    ): Container.Subcomponent<Args, Provide<P, P2>> {
         return (...args) => {
-            const child = new Container<never>({ scope, parent: this })
+            const child = new Container<never>({ parent: this })
             return f?.(child, ...args) ?? child as any
         }
     }
@@ -569,15 +604,11 @@ export namespace Container {
     export interface Subcomponent<Args extends any[], P extends ProvideGraph = never> {
         (...arg: Args): Container<P>
     }
-
-    export interface ChildOptions<S = never> {
-        scope?: S[] | S
-    }
 }
 
 /** Implementation of a module that performs operations on a given `Container`. */
 export interface FunctionModule {
-    (ct: Container<never>): Container<any>
+    (ct: Container<never>): Container<any> | Container<never>
 }
 
 /** An object used to provide definitions to a `Container` */

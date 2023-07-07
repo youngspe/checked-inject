@@ -184,7 +184,8 @@ describe(Container, () => {
         expect(grandChild1a.request(ArrayKey)).toBe(out1)
         expect(grandChild1b.request(ArrayKey)).toBe(out1)
 
-        const child2 = parent.createChild({ scope: MyScope })
+        const child2 = parent.createChild()
+            .addScope(MyScope)
             .provide(NumberKey, {}, () => 40)
         const grandChild2a = child2.createChild()
             .provide(StringKey, {}, () => 'baz')
