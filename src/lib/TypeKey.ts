@@ -27,12 +27,12 @@ import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
  *  }
  *  ```
  */
-export interface InjectableClass<T> extends Class<T> {
+export interface InjectableClass<T = any> extends Class<T> {
     readonly scope?: Scope
     readonly inject?: HasBaseKeySymbol<T> | (() => HasBaseKeySymbol<T>)
 }
 
-export interface ClassWithoutDefault<T> extends InjectableClass<T> {
+export interface ClassWithoutDefault extends InjectableClass<any> {
     readonly inject?: never
 }
 export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
@@ -157,7 +157,7 @@ export type DepsOf<K extends AnyKey> =
 export type IsSyncDepsOf<K extends AnyKey> =
     [AnyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope ? UnableToResolveIsSync<K> :
-    K extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<K> :
+    K extends BaseTypeKey | InjectableClass ? IsSync<K> :
     K extends DependencyKey<infer _T, any, never> ? never :
     K extends DependencyKey<infer _T, any, infer D> ? D :
     K extends readonly (infer X extends AnyKey)[] ? IsSyncDepsOf<X> :
@@ -206,11 +206,11 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 
 const _isSyncSymbol = Symbol()
 
-export interface IsSync<out K extends HasTypeKeySymbol<any> | PrivateConstruct> {
+export interface IsSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
     [_isSyncSymbol]: K
 }
 
-export type RequireSync<D extends Dependency> = D extends HasTypeKeySymbol<any> | PrivateConstruct ? IsSync<D> : never
+export type RequireSync<D extends Dependency> = D extends BaseTypeKey | InjectableClass ? IsSync<D> : never
 
 export type Dependency =
     | Scope
@@ -223,7 +223,7 @@ export type Dependency =
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
 
-export interface BaseTypeKey<out T, Def extends HasBaseKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
+export interface BaseTypeKey<out T = any, Def extends HasBaseKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: Scope
     readonly name: string
@@ -237,7 +237,17 @@ export interface TypeKey<out T = any, Def extends BaseKey.Any<T> = any> extends 
     readonly keyTag: symbol
 }
 
-export interface BaseTypeKeyWithDefault<out T, D, Sync> extends BaseTypeKey<T, HasBaseKeySymbol<T, D, Sync>> { }
+export interface BaseTypeKeyWithoutDefault extends BaseTypeKey<any, never> { }
+export interface BaseTypeKeyWithDefault<
+    out T,
+    D extends Dependency,
+    Sync extends Dependency,
+> extends BaseTypeKey<T, HasBaseKeySymbol<T, D, Sync>> { }
+
+export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
+export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
+    | BaseTypeKeyWithDefault<T, D, Sync>
+    | ClassWithDefault<T, D, Sync>
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 

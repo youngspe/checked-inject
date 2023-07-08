@@ -1,8 +1,8 @@
 import { BaseKey, DependencyKey, InjectableClass } from "."
 import { Scope, Singleton } from './Scope'
 import { Inject } from "./Inject"
-import { Actual, AnyKey, BaseTypeKey, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
-import { Initializer, PrivateConstruct, isPromise, nullable } from "./_internal"
+import { Actual, AnyKey, BaseTypeKey, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, KeyWithDefault, KeyWithoutDefault, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
+import { Initializer, isPromise, nullable } from "./_internal"
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -84,44 +84,11 @@ interface Entry<T, P extends ProvideGraph, K extends AnyKey> {
 
 const _classTypeKey = Symbol()
 
-type _UnresolvedKeys<
-    Pairs extends GraphPairs,
-    AllKeys extends Dependency,
-    Solved extends Dependency,
-    K extends Dependency,
-> =
-    [Dependency] extends [K] ? UnableToResolve<['UnresolvedKeys', K]> :
-    K extends Solved ? never :
-    K extends AllKeys ? ([Pairs] extends [infer P extends GraphPairs] ? (
-        P extends DepPair<K, infer X> ? _UnresolvedKeys<Pairs, AllKeys, Solved, X> : never
-    ) : never) :
-    K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
-    K extends (
-        | BaseTypeKeyWithDefault<infer _T, infer D, any>
-        | ClassWithDefault<infer _T, infer D, any>
-    ) ? _UnresolvedKeys<
-        Pairs,
-        AllKeys,
-        Solved,
-        D | (K extends { scope: infer Scp extends Scope } ? Scp : never)
-    > :
-    K extends IsSync<infer K2> ? (
-        K2 extends AllKeys ? K :
-        K2 extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? never :
-        K2 extends (
-            | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
-            | ClassWithDefault<infer _T, any, infer Sync>
-        ) ? _UnresolvedKeys<Pairs, AllKeys, Solved, Sync> :
-        // If a dependency can't be resolved, it may as well be sync
-        never
-    ) :
-    K
-
 export type UnresolvedKeys<
     P extends ProvideGraph,
     K extends AnyKey,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> = _UnresolvedKeys<PairsOf<P>, Keys<P>, SimplifiedDeps<P>, DepsOf<K> | Sync>
+> = DepsForKey<P, DepsOf<K> | Sync>
 
 const unresolved = Symbol()
 
@@ -137,77 +104,77 @@ export type CanRequest<
     & Container<P>
     & ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
-type Keys<P extends ProvideGraph> = PairsOf<P>['key']
+type Keys<P extends ProvideGraph> =
+    | PairsOf<P>['key']
+    | (P extends ChildProvideGraph<infer Parent> ? Keys<Parent> : never)
 
-type DepsForKey<Pairs extends GraphPairs, K extends Dependency> =
-    [Dependency] extends [K] ? UnableToResolve<['DepsForKey', K]> :
-    K extends Pairs['key'] ? (Pairs extends DepPair<K, infer D> ? D : never) :
-    K extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? K :
-    K extends (
-        | BaseTypeKeyWithDefault<infer _T, infer D, any>
-        | ClassWithDefault<infer _T, infer D, any>
-    ) ? D :
-    K extends IsSync<infer K2> ? (
-        K2 extends Pairs['key'] ? K :
-        K2 extends (BaseTypeKey<infer _T, never> | ClassWithoutDefault<infer _T>) ? never :
-        K2 extends (
-            | BaseTypeKeyWithDefault<infer _T, any, infer Sync>
-            | ClassWithDefault<infer _T, any, infer Sync>
-        ) ? Sync :
-        never
-    ) :
-    K
+type MergePairs<Old extends GraphPairs, New extends GraphPairs> = Exclude<Old, DepPair<New['key'], any>> | New
 
 export type Provide<Old extends ProvideGraph, New extends ProvideGraph> =
-    New extends ChildProvideGraph<infer Parent, infer Pairs> ? ChildProvideGraph<Provide<Old, Parent>, Pairs> :
-    New extends ProvideGraph<infer NewPairs> ? (
-        Old extends ChildProvideGraph<infer Parent, infer OldPairs> ? ChildProvideGraph<
-            Parent,
-            | Exclude<OldPairs, DepPair<Keys<New>, any>>
-            | NewPairs
-        > :
-        Old extends ProvideGraph<infer OldPairs> ? ProvideGraph<
-            | Exclude<OldPairs, DepPair<Keys<New>, any>>
-            | NewPairs
-        > :
-        never
-    ) :
-    never
+    [Old] extends [never] ? New :
+    [New] extends [never] ? Old :
+    [New] extends [ChildProvideGraph<infer Parent, infer Pairs>] ? ChildProvideGraph<Provide<Old, Parent>, Pairs> :
+    [Old] extends [ChildProvideGraph<infer Parent, infer Pairs>] ? ChildProvideGraph<Parent, MergePairs<Pairs, PairsOf<New>>> :
+    ProvideGraph<MergePairs<PairsOf<Old>, PairsOf<New>>>
 
-type SimplifyStep<Pairs extends GraphPairs, Pairs2 extends GraphPairs = Pairs> =
-    Pairs extends DepPair<infer K, infer D> ? (
-        K extends D ? never : DepPair<K, D extends any ? DepsForKey<Pairs2, D> : never>
-    ) : never
+type DepsForKeyTransitive<
+    PRoot extends ProvideGraph,
+    K extends Dependency,
+    PCurrent extends ProvideGraph = PRoot,
+    Pairs extends GraphPairs = PairsOf<PCurrent>,
+> =
+    K extends Pairs['key'] ? (Pairs extends DepPair<K, infer D> ? DepsForKey<PRoot, D> : never) :
+    PCurrent extends ChildProvideGraph<infer Parent> ? DepsForKeyTransitive<PRoot, K, Parent> :
+    UnableToResolve<['DepsForKeyTransitive', K, [PCurrent, PRoot] extends [PRoot, PCurrent] ? true : false]>
 
-type SolvedKeys<P extends ProvideGraph> = PairsOf<P> extends infer Pairs ? (
-    Pairs extends DepPair<infer K, never> ? K : never
-) : never
+type DepsForKeyIsSync<
+    P extends ProvideGraph,
+    K2 extends InjectableClass | BaseTypeKey,
+    K extends IsSync<K2>,
+> =
+    K2 extends PairsOf<P> ? K :
+    K2 extends KeyWithoutDefault ? never :
+    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKey<P, Sync> :
+    UnableToResolve<['DepsForKeyIsSync', K]>
 
-export type SimplifiedDeps<P extends ProvideGraph> = [SimplifyStep<PairsOf<P>>] extends [infer S extends ProvideGraph] ? (
-    [P, S] extends [S, P] ? SolvedKeys<S> : SimplifiedDeps<S>
-) : never
+type _DepsForKey2<
+    P extends ProvideGraph,
+    K extends Dependency,
+> =
+    [Dependency] extends [K] ? UnableToResolve<['DepsForKey', K]> :
+    K extends Keys<P> ? DepsForKeyTransitive<P, K> :
+    K extends KeyWithoutDefault ? K :
+    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKey<P, D> :
+    K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
+    K
+
+type DepsForKey<
+    P extends ProvideGraph,
+    K extends Dependency,
+> = K extends any ? _DepsForKey2<P, K> : never
 
 const _depsTag = Symbol()
 
+// Dependency pair
 interface DepPair<out K extends Dependency, D extends Dependency> {
-    d(d: D | 'never'): D
+    deps: D
     key: K
 }
+
 interface GraphPairs extends DepPair<Dependency, any> { }
 
 export interface ProvideGraph<Pairs extends GraphPairs = GraphPairs> {
     pairs: Pairs
 }
-interface ChildProvideGraph<
+export interface ChildProvideGraph<
     out Parent extends ProvideGraph,
     Pairs extends DepPair<Dependency, any> = DepPair<Dependency, any>,
 > extends ProvideGraph<Pairs> {
-    childOf: Parent
+    parent: Parent
 }
 
 type ParentOf<P extends ProvideGraph> = P extends ChildProvideGraph<infer Parent> ? Parent : never
 type PairsOf<P extends ProvideGraph> = P['pairs']
-
 
 interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
@@ -546,7 +513,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild<S2 extends Scope = never>(): Container<ChildProvideGraph<P, S2 extends any ? DepPair<S2, never> : never>> {
+    createChild(): Container<ChildProvideGraph<P, never>> {
         return new Container({ parent: this })
     }
 

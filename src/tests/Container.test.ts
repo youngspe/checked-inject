@@ -1,4 +1,4 @@
-import { Actual, BaseTypeKeyWithDefault, ClassWithDefault, ClassWithoutDefault, Container, ContainerActual, DependencyKey, DepsOf, Inject, InjectableClass, IsSyncDepsOf, Module, Scope, SimplifiedDeps, Singleton, TypeKey, UnresolvedKeys, } from '../lib'
+import { Container, Inject, Module, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
@@ -8,6 +8,9 @@ class BooleanKey extends TypeKey<boolean>() { static readonly keyTag = Symbol() 
 describe(Container, () => {
     test('provide and request', () => {
         const target = Container.create().provide(NumberKey, {}, () => 10)
+        type X = (typeof target extends Container<ProvideGraph<infer Pairs>> ? Pairs : never)
+        type Y<X, K> = [X] extends [{ key: K, deps: infer D }] ? X : 'foo'
+        type Z = Y<X, typeof NumberKey>
 
         const out = target.request(NumberKey);
 
@@ -285,13 +288,25 @@ describe(Container, () => {
             .provideInstance(NumberKey, 10)
             .provide(CustomKey, { num: NumberKey }, ({ num }) => ({ a: num, }))
 
-        const child1 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 20)
-        const grandChild1 = child1.createChild({ scope: MyScope }).provideInstance(NumberKey, 30)
+        const child1 = parent
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 20)
+        const grandChild1 = child1
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 30)
 
         const out1 = child1.request(CustomKey)
 
-        const child2 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 40)
-        const grandChild2 = child2.createChild({ scope: MyScope }).provideInstance(NumberKey, 50)
+        const child2 = parent
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 40)
+        const grandChild2 = child2
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 50)
 
         const out2 = child2.request(CustomKey)
 
@@ -314,8 +329,14 @@ describe(Container, () => {
             .provideInstance(NumberKey, 10)
             .provide(CustomKey, MyScope, { num: NumberKey }, ({ num }) => ({ a: num, }))
 
-        const child1 = parent.createChild({ scope: MyScope }).provideInstance(NumberKey, 20)
-        const grandChild1 = child1.createChild({ scope: MyScope }).provideInstance(NumberKey, 30)
+        const child1 = parent
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 20)
+        const grandChild1 = child1
+            .createChild()
+            .addScope(MyScope)
+            .provideInstance(NumberKey, 30)
 
         const out = child1.request(CustomKey)
 
