@@ -1,4 +1,4 @@
-import { Container, Inject, Module, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
+import { AllKeys, Container, FlatGraph, Inject, Module, ModuleProvides, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }

@@ -1,7 +1,7 @@
 import { BaseKey, DependencyKey, InjectableClass } from "."
 import { Scope, Singleton } from './Scope'
 import { Inject } from "./Inject"
-import { Actual, AnyKey, BaseTypeKey, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, KeyWithDefault, KeyWithoutDefault, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
+import { Actual, AnyKey, BaseTypeKey, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, KeyWithDefault, KeyWithoutDefault, NotSync, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
 import { Initializer, isPromise, nullable } from "./_internal"
 
 /** Represents a possible error when resolving a dependency. */
@@ -104,28 +104,50 @@ export type CanRequest<
     & Container<P>
     & ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
-type Keys<P extends ProvideGraph> =
-    | PairsOf<P>['key']
-    | (P extends ChildProvideGraph<infer Parent> ? Keys<Parent> : never)
+type GraphWithKeys<K extends Dependency> =
+    | FlatGraph<K extends any ? DepPair<K, any> : never>
+    | ChildGraph<GraphWithKeys<K>, K extends any ? DepPair<K, any> : never>
+
+export type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
 
 type MergePairs<Old extends GraphPairs, New extends GraphPairs> = Exclude<Old, DepPair<New['key'], any>> | New
 
-export type Provide<Old extends ProvideGraph, New extends ProvideGraph> =
-    [Old] extends [never] ? New :
-    [New] extends [never] ? Old :
-    [New] extends [ChildProvideGraph<infer Parent, infer Pairs>] ? ChildProvideGraph<Provide<Old, Parent>, Pairs> :
-    [Old] extends [ChildProvideGraph<infer Parent, infer Pairs>] ? ChildProvideGraph<Parent, MergePairs<Pairs, PairsOf<New>>> :
-    ProvideGraph<MergePairs<PairsOf<Old>, PairsOf<New>>>
+export type Merge<Old extends ProvideGraph, New extends ProvideGraph> =
+    New extends ChildGraph<infer Parent, infer Pairs> ? ChildGraph<Merge<Old, Parent>, Pairs> :
+    New extends FlatGraph<infer Pairs> ? Provide<Old, Pairs> :
+    never
 
-type DepsForKeyTransitive<
+export type Provide<P extends ProvideGraph, Pairs extends GraphPairs> =
+    P extends ChildGraph<infer Parent, infer OldPairs> ? ChildGraph<Parent, MergePairs<OldPairs, Pairs>> :
+    P extends FlatGraph<infer OldPairs> ? FlatGraph<MergePairs<OldPairs, Pairs>> :
+    never
+
+type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, D> extends never ? (
+    P extends ChildGraph<infer Parent> ? _FindGraphWithDep<Parent, D> : never
+) : P
+
+type ExcludeBroad<D extends Dependency> = D extends Extract<Dependency, D> ? never : D
+
+type FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = _FindGraphWithDep<P, ExcludeBroad<D>>
+
+type _DepsForKeyTransitive<
     PRoot extends ProvideGraph,
     K extends Dependency,
     PCurrent extends ProvideGraph = PRoot,
     Pairs extends GraphPairs = PairsOf<PCurrent>,
-> =
-    K extends Pairs['key'] ? (Pairs extends DepPair<K, infer D> ? DepsForKey<PRoot, D> : never) :
-    PCurrent extends ChildProvideGraph<infer Parent> ? DepsForKeyTransitive<PRoot, K, Parent> :
-    UnableToResolve<['DepsForKeyTransitive', K, [PCurrent, PRoot] extends [PRoot, PCurrent] ? true : false]>
+> = K extends any ? (
+    K extends KeysOf<PCurrent> ? (Pairs extends DepPair<K, infer D> ? DepsForKey<
+        Pairs extends WithScope<infer Scp> ? FindGraphWithDep<PRoot, Scp | K> : PRoot,
+        D
+    > : never) :
+    PCurrent extends ChildGraph<infer Parent> ? _DepsForKeyTransitive<PRoot, K, Parent> :
+    UnableToResolve<['DepsForKeyTransitive', K, AllKeys<PRoot>]>
+) : never
+
+type DepsForKeyTransitive<
+    PRoot extends ProvideGraph,
+    K extends Dependency,
+> = K extends any ? _DepsForKeyTransitive<PRoot, K> : never
 
 type DepsForKeyIsSync<
     P extends ProvideGraph,
@@ -137,12 +159,12 @@ type DepsForKeyIsSync<
     K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKey<P, Sync> :
     UnableToResolve<['DepsForKeyIsSync', K]>
 
-type _DepsForKey2<
+type _DepsForKey<
     P extends ProvideGraph,
     K extends Dependency,
 > =
-    [Dependency] extends [K] ? UnableToResolve<['DepsForKey', K]> :
-    K extends Keys<P> ? DepsForKeyTransitive<P, K> :
+    Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
+    K extends AllKeys<P> ? DepsForKeyTransitive<P, K> :
     K extends KeyWithoutDefault ? K :
     K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKey<P, D> :
     K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
@@ -151,7 +173,7 @@ type _DepsForKey2<
 type DepsForKey<
     P extends ProvideGraph,
     K extends Dependency,
-> = K extends any ? _DepsForKey2<P, K> : never
+> = K extends any ? _DepsForKey<P, K> : never
 
 const _depsTag = Symbol()
 
@@ -161,20 +183,41 @@ interface DepPair<out K extends Dependency, D extends Dependency> {
     key: K
 }
 
+interface WithScope<Scp extends Scope> {
+    scope: Scp
+}
+
 interface GraphPairs extends DepPair<Dependency, any> { }
 
-export interface ProvideGraph<Pairs extends GraphPairs = GraphPairs> {
+interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
     pairs: Pairs
 }
-export interface ChildProvideGraph<
+
+export interface FlatGraph<Pairs extends GraphPairs = GraphPairs> extends BaseProvideGraph<Pairs> { }
+
+export interface ChildGraph<
     out Parent extends ProvideGraph,
-    Pairs extends DepPair<Dependency, any> = DepPair<Dependency, any>,
-> extends ProvideGraph<Pairs> {
+    Pairs extends GraphPairs = GraphPairs,
+> extends BaseProvideGraph<Pairs> {
     parent: Parent
 }
 
-type ParentOf<P extends ProvideGraph> = P extends ChildProvideGraph<infer Parent> ? Parent : never
+export type ProvideGraph<Pairs extends GraphPairs = GraphPairs> =
+    | FlatGraph<Pairs>
+    | ChildGraph<ProvideGraph, Pairs>
+
+type ParentOf<P extends ProvideGraph> = P extends ChildGraph<infer Parent> ? Parent : never
 type PairsOf<P extends ProvideGraph> = P['pairs']
+type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
+
+type PairForProvide<K extends Dependency, D extends Dependency, S extends Scope> =
+    & DepPair<K, D | (Scope extends S ? never : S)>
+    & ([S] extends [never] ? unknown : (Scope extends S ? unknown : WithScope<S>))
+
+type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends Dependency, S extends Scope> =
+    [Dependency] extends [Sync] ? never :
+    & DepPair<IsSync<K>, Sync>
+    & ([S] extends [never] ? WithScope<S> : unknown)
 
 interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
@@ -195,7 +238,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<ProvideGraph<
+    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<FlatGraph<
         | DepPair<typeof Singleton, never>
         | DepPair<typeof Container.Key, never>
         | DepPair<IsSync<typeof Container.Key>, never>
@@ -414,10 +457,8 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ]
     ): Container<Provide<
         P,
-        ProvideGraph<
-            | DepPair<K, D | (Scope extends S ? never : S)>
-            | ([Dependency] extends [Sync] ? never : DepPair<IsSync<K>, Sync>)
-        >
+        | PairForProvide<K, D, S>
+        | PairForProvideIsSync<K, Sync, S>
     >> {
         type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
@@ -467,14 +508,14 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
             | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
             | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>],
         ]
-    ): Container<Provide<P, ProvideGraph<DepPair<K, S | D>>>> {
+    ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
         this.provide(key as any, ...args)
         return this as any
     }
 
     /** Registers 'key' to provide the given `instance`. */
     provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<
-        Provide<P, ProvideGraph<DepPair<IsSync<K>, never> | DepPair<K, never>>>
+        Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
     > {
         type T = Actual<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
@@ -483,7 +524,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     addScope<S extends Scope>(...scope: S[]): Container<
-        Provide<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
+        Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
     > {
         this.scopes.push(...scope)
         return this as any
@@ -513,22 +554,22 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Returns a child of this container, after executing `f` with it. */
-    createChild(): Container<ChildProvideGraph<P, never>> {
+    createChild(): Container<ChildGraph<P, never>> {
         return new Container({ parent: this })
     }
 
     /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
     createSubcomponent<Args extends any[], P2 extends ProvideGraph = never>(
-        f?: (child: Container<never>, ...args: Args) => Container<P2>,
-    ): Container.Subcomponent<Args, Provide<P, P2>> {
+        f?: (child: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<P2>,
+    ): Container.Subcomponent<Args, Merge<P, P2>> {
         return (...args) => {
-            const child = new Container<never>({ parent: this })
+            const child = new Container<ChildGraph<FlatGraph<never>, never>>({ parent: this })
             return f?.(child, ...args) ?? child as any
         }
     }
 
     /** Apply a list of `Module`s to this container. */
-    apply<M extends Module[]>(...modules: M): Container<Provide<P, ModuleProvides<M>>> {
+    apply<M extends Module[]>(...modules: M): Container<Merge<P, ModuleProvides<M>>> {
         for (let mod of modules) {
             if (typeof mod == 'function') {
                 mod(this as any)
@@ -564,7 +605,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
 }
 
 export namespace Container {
-    export class Key extends TypeKey<Container<never>>({ name: Container.name }) { static readonly keyTag = Symbol() }
+    export class Key extends TypeKey<Container<FlatGraph<never>>>({ name: Container.name }) { static readonly keyTag = Symbol() }
     export const inject = Inject.from(Key)
 
     /** A function that returns a new subcomponent instance using the given arguments. */
@@ -575,7 +616,7 @@ export namespace Container {
 
 /** Implementation of a module that performs operations on a given `Container`. */
 export interface FunctionModule {
-    (ct: Container<never>): Container<any> | Container<never>
+    (ct: Container<FlatGraph<never>>): Container<any>
 }
 
 /** An object used to provide definitions to a `Container` */
@@ -586,7 +627,7 @@ export function Module<M extends Module[]>(...m: M): M {
 }
 
 export type ModuleProvides<M> =
-    M extends (ct: Container<never>) => Container<infer P> ? P :
-    M extends readonly [infer A, ...infer B] ? Provide<ModuleProvides<A>, ModuleProvides<B>> :
-    M extends [] ? never :
+    M extends (ct: Container<FlatGraph<never>>) => Container<infer P> ? P :
+    M extends readonly [infer A, ...infer B] ? Merge<ModuleProvides<A>, ModuleProvides<B>> :
+    M extends [] ? FlatGraph<never> :
     never

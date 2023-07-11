@@ -1,4 +1,4 @@
-import { Inject, Provide, ProvideGraph, Scope } from "."
+import { Inject, Merge, ProvideGraph, Scope } from "."
 import { BaseKey } from "./BaseKey"
 import { Container, } from './Container'
 import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
@@ -127,7 +127,7 @@ type ContainerTransform<T, P extends ProvideGraph> =
         T extends [] ? [] :
         T extends readonly [infer A, ...infer B] ? [ContainerTransform<A, P>, ...ContainerTransform<B, P>] :
         T extends readonly (infer U)[] ? ContainerTransform<U, P>[] :
-        T extends Container<infer P1> ? Container<Provide<P, P1>> :
+        T extends Container<infer P1> ? Container<Merge<P, P1>> :
         T extends Promise<infer U> ? Promise<ContainerTransform<U, P>> :
         T extends (...args: infer Args) => infer U ? (...args: Args) => ContainerTransform<U, P> :
         T extends OnlyObject ? { [K in keyof T]: ContainerTransform<T[K], P> } :
@@ -185,6 +185,10 @@ export abstract class AbstractKey<out T> implements HasAbstractKeySymbol<T> {
         return Inject.optional(this)
     }
 
+    Async = function <Th extends AnyKey>(this: Th): Inject.Async<Th> {
+        return Inject.async(this)
+    }
+
     Build = function <
         Th extends SimpleKey<(...args: Args) => Out>,
         Args extends any[],
@@ -210,12 +214,19 @@ export interface IsSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
     [_isSyncSymbol]: K
 }
 
+const _notSyncSymbol = Symbol()
+
+export interface NotSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
+    [_notSyncSymbol]: K
+}
+
 export type RequireSync<D extends Dependency> = D extends BaseTypeKey | InjectableClass ? IsSync<D> : never
 
 export type Dependency =
     | Scope
     | HasTypeKeySymbol<any>
     | IsSync<any>
+    | NotSync<any>
     | PrivateConstruct
     | UnableToResolve<any>
     | UnableToResolveIsSync<any>

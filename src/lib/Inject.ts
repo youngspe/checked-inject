@@ -1,4 +1,4 @@
-import { DepsOf, InjectError, DependencyNotSyncError, ProvideGraph, ChildProvideGraph } from "."
+import { DepsOf, InjectError, DependencyNotSyncError, ProvideGraph, ChildGraph, FlatGraph } from "."
 import { Container } from "./Container"
 import { ContainerActual, DependencyKey, Actual, TypeKey, AnyKey, Dependency, IsSync, RequireSync, IsSyncDepsOf } from "./TypeKey"
 import { BaseKey } from "./BaseKey"
@@ -175,7 +175,7 @@ export namespace Inject {
         Args extends any[],
         P extends ProvideGraph,
     > extends Map<(...args: Args) => Container<P>, typeof Container.Key> {
-        constructor(f: (ct: Container<ChildProvideGraph<never, never>>, ...args: Args) => Container<P>) {
+        constructor(f: (ct: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<P>) {
             super(Container.Key, ct => (...args) => f(ct.createChild(), ...args))
         }
     }
@@ -189,7 +189,7 @@ export namespace Inject {
     export function subcomponent<
         Args extends any[],
         P extends ProvideGraph,
-    >(f: (ct: Container<ChildProvideGraph<never, never>>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {
+    >(f: (ct: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<P>): SubcomponentDefinition<Args, P> {
         return new _SubcomponentDefinition(f)
     }
 }
