@@ -1,4 +1,4 @@
-import { AllKeys, Container, FlatGraph, Inject, Module, ModuleProvides, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
+import { Container, Inject, Module, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
@@ -459,5 +459,22 @@ describe(Container, () => {
 
         expect(sub1.request(Keys.UserInfo)).toEqual({ userName: 'alice', userId: '123' })
         expect(sub2.request(Keys.UserInfo)).toEqual({ userName: 'bob', userId: '456' })
+    })
+
+    test('request async dependencies', async () => {
+        const target = Container.create()
+            .provideInstance(NumberKey, 10)
+            .provideAsync(StringKey, {}, () => 'foo')
+            .provide(ArrayKey, { str: StringKey }, ({ str }) => [str, 'b'])
+
+        const out = target.request({
+            a: NumberKey,
+            b: StringKey.Async().Lazy(),
+            c: Inject.async({ d: ArrayKey })
+        })
+
+        expect(out.a).toEqual(10)
+        expect(await out.b()).toEqual('foo')
+        expect((await out.c).d).toEqual(['foo', 'b'])
     })
 })

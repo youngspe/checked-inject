@@ -1,4 +1,4 @@
-import { Container, InjectError, ProvideGraph } from './Container';
+import { InjectError, ProvideGraph } from './Container';
 import { AnyKey, DepsOf, AbstractKey, HasBaseKeySymbol, _baseKeySymbol, Actual, ContainerActual, Dependency, RequireSync, IsSyncDepsOf } from "./TypeKey";
 import { Initializer } from './_internal';
 

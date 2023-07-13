@@ -158,7 +158,7 @@ export namespace Inject {
         return new _Build(src, ...args)
     }
 
-    export abstract class Async<K extends AnyKey> extends BaseKey<Promise<Actual<K>>, K, DepsOf<K>, never> {
+    export abstract class Async<K extends AnyKey> extends BaseKey<Promise<Actual<K>>, K, DepsOf<K>, never, never> {
         override init(deps: InjectError | Initializer<Actual<K>>): InjectError | Initializer.Sync<Promise<Actual<K>>> {
             if (deps instanceof InjectError) return deps
             return { sync: true, init: () => Promise.resolve(deps.init()) }
