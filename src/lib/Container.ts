@@ -149,6 +149,10 @@ type DepsForKeyTransitive<
     K extends Dependency,
 > = K extends any ? _DepsForKeyTransitive<PRoot, K> : never
 
+type DepsForKeyScoped<P extends ProvideGraph, K, D extends Dependency> =
+    K extends WithScope<infer Scp> ? DepsForKey<FindGraphWithDep<P, Scp>, Scp | D> :
+    DepsForKey<P, D>
+
 type DepsForKeyIsSync<
     P extends ProvideGraph,
     K2 extends InjectableClass | BaseTypeKey,
@@ -156,8 +160,17 @@ type DepsForKeyIsSync<
 > =
     K2 extends PairsOf<P> ? K :
     K2 extends KeyWithoutDefault ? never :
-    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKey<P, Sync> :
+    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K, Sync> :
     UnableToResolve<['DepsForKeyIsSync', K]>
+
+type DepsForKeyFallback<
+    P extends ProvideGraph,
+    K extends Dependency,
+> =
+    K extends KeyWithoutDefault ? K :
+    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<P, K, D> :
+    K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
+    K
 
 type _DepsForKey<
     P extends ProvideGraph,
@@ -165,10 +178,7 @@ type _DepsForKey<
 > =
     Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
     K extends AllKeys<P> ? DepsForKeyTransitive<P, K> :
-    K extends KeyWithoutDefault ? K :
-    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKey<P, D> :
-    K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
-    K
+    DepsForKeyFallback<P, K>
 
 type DepsForKey<
     P extends ProvideGraph,
