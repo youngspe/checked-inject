@@ -319,15 +319,22 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         // If this dependency is just an instance, return that
         if ('instance' in value) return { sync: true, init: () => value.instance }
         if ('promise' in value) return { sync: false, init: () => value.promise }
+        const valueScope = value.scope?.length ? value.scope : undefined
 
         let dependencyContainer: Container<any> = this
-        if (value.scope?.length) {
-            const missingScopes = this._missingScopes(value.scope)
+        if (valueScope) {
+            const missingScopes = this._missingScopes(valueScope)
             if (missingScopes.length > 0) return new ScopeUnavailableError(missingScopes)
 
-            while (dependencyContainer._parent != undefined) {
-                if (dependencyContainer === entryContainer) break
-                if (value.scope.some(s => dependencyContainer.scopes.includes(s))) {
+            let ct: Container<any> | undefined = this
+
+            while (ct) {
+                dependencyContainer = ct
+
+                if (dependencyContainer === entryContainer) {
+                    break
+                }
+                if (valueScope.some(s => dependencyContainer.scopes.includes(s))) {
                     // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
                     // don't store the instance in the ancestor.
                     // do this by creating a new Entry so changes to value don't affect the original entry.value
@@ -335,10 +342,8 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
                     dependencyContainer._setKeyProvider(key, entry)
                     break
                 }
-                dependencyContainer = dependencyContainer._parent
+                ct = ct._parent
             }
-        } else {
-            dependencyContainer = this
         }
 
         // Get the dependencies needed to intialize the requested value
@@ -346,7 +351,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         const initializer = value.binding.init(depsResult)
 
         if (initializer instanceof InjectError) return new DependencyFailedError(initializer)
-        if (value.scope == undefined) return initializer
+        if (!valueScope) return initializer
         let init = nullable(initializer)
 
         const provider: Initializer.Base<T> = {
@@ -476,9 +481,12 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         const keyScope = key.scope
         const provideScope = Scope.isScope(args[0]) ? args[0] : undefined
 
-        let scope: Scope[] = []
+        let scope: Scope[] | undefined = undefined
         if (keyScope || provideScope) {
             scope = Scopes.flatten([keyScope ?? [], provideScope ?? []])
+            if (scope.length == 0) {
+                scope = undefined
+            }
         }
 
         let entry: Entry<T, P, AnyKey>

@@ -98,10 +98,8 @@ describe(Container, () => {
     })
 
     test('inject structured provider dependencies', () => {
-        const target = Container.create()
         let sideEffect = 0
-
-        const out = target
+        const target = Container.create()
             .provideInstance(NumberKey, 10)
             .provide(StringKey, {}, () => {
                 sideEffect += 1
@@ -113,7 +111,8 @@ describe(Container, () => {
                 b: { c: StringKey.Provider() },
                 c: BooleanKey,
             }, ({ a, b: { c } }) => [a.toString(), c(), c()])
-            .request(ArrayKey)
+
+        const out = target.request(ArrayKey)
 
         expect(out).toEqual(['10', 'foo', 'foo'])
         expect(sideEffect).toEqual(2)
@@ -318,7 +317,7 @@ describe(Container, () => {
         expect(grandChild2.request(CustomKey)).toBe(out2)
     })
 
-    test('Provided scope overrides TypeKey.Scope', () => {
+    test('Provided scope added to TypeKey.scope', () => {
         class MyScope extends Scope() { static readonly scopeTag = Symbol() }
         class CustomKey extends TypeKey<{ a: number }>() {
             static readonly keyTag = Symbol()
