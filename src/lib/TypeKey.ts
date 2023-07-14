@@ -1,4 +1,4 @@
-import { Inject, Merge, ProvideGraph, Scope } from "."
+import { Inject, Merge, ProvideGraph, Scope, Scopes } from "."
 import { BaseKey } from "./BaseKey"
 import { Container, } from './Container'
 import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
@@ -28,7 +28,7 @@ import { AbstractClass, Class, PrivateConstruct, asMixin } from "./_internal"
  *  ```
  */
 export interface InjectableClass<T = any> extends Class<T> {
-    readonly scope?: Scope
+    readonly scope?: Scopes
     readonly inject?: HasBaseKeySymbol<T> | (() => HasBaseKeySymbol<T>)
 }
 
@@ -236,7 +236,7 @@ const _typeKeySymbol: unique symbol = Symbol()
 
 export interface BaseTypeKey<out T = any, Def extends HasBaseKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
-    readonly scope?: Scope
+    readonly scope?: Scopes
     readonly name: string
     readonly fullName: string
     readonly of?: ClassLike<T>

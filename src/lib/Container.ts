@@ -1,5 +1,5 @@
 import { BaseKey, DependencyKey, InjectableClass } from "."
-import { Scope, Singleton } from './Scope'
+import { Scope, Scopes, Singleton } from './Scope'
 import { Inject } from "./Inject"
 import { Actual, AnyKey, BaseTypeKey, ContainerActual, Dependency, DepsOf, IsSync, IsSyncDepsOf, KeyWithDefault, KeyWithoutDefault, NotSync, RequireSync, TypeKey, UnableToResolve, } from "./TypeKey"
 import { Initializer, isPromise, nullable } from "./_internal"
@@ -52,9 +52,9 @@ export class InjectPropertyError extends InjectError {
 }
 
 export class ScopeUnavailableError extends InjectError {
-    readonly scope: Scope
-    constructor(scope: Scope) {
-        const message = scope.name ? `Scope ${scope.name} unavailable` : 'Scope unavailable'
+    readonly scope: Scopes
+    constructor(scope: Scopes) {
+        const message = `Scope ${Scopes.flatten(scope).map(s => s.name ?? '<unnamed>').join('|')} unavailable`
         super(message)
         this.scope = scope
     }
@@ -62,7 +62,7 @@ export class ScopeUnavailableError extends InjectError {
 
 // This entry has a dependency key and an initializer function
 interface EntryInit<T, P extends ProvideGraph, K extends AnyKey> {
-    scope?: Scope
+    scope?: Scope[]
     binding: BaseKey<T, K, any, P, any>
 }
 
@@ -194,7 +194,7 @@ interface DepPair<out K extends Dependency, D extends Dependency> {
 }
 
 interface WithScope<Scp extends Scope> {
-    scope: Scp
+    scope: Scopes<Scp>
 }
 
 interface GraphPairs extends DepPair<Dependency, any> { }
@@ -216,18 +216,27 @@ export type ProvideGraph<Pairs extends GraphPairs = GraphPairs> =
     | FlatGraph<Pairs>
     | ChildGraph<ProvideGraph, Pairs>
 
-type ParentOf<P extends ProvideGraph> = P extends ChildGraph<infer Parent> ? Parent : never
 type PairsOf<P extends ProvideGraph> = P['pairs']
 type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
 
+type CombinedScope<K, S extends Scope> = Exclude<
+    | S
+    | (K extends { scope: infer A extends Scope } ? A : never),
+    Scope
+>
+
 type PairForProvide<K extends Dependency, D extends Dependency, S extends Scope> =
-    & DepPair<K, D | (Scope extends S ? never : S)>
-    & ([S] extends [never] ? unknown : (Scope extends S ? unknown : WithScope<S>))
+    [CombinedScope<K, S>] extends [infer Scp extends Scope] ? (
+        & DepPair<K, D | Scp>
+        & ([Scp] extends [never] ? unknown : WithScope<Scp>)
+    ) : never
 
 type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends Dependency, S extends Scope> =
-    [Dependency] extends [Sync] ? never :
-    & DepPair<IsSync<K>, Sync>
-    & ([S] extends [never] ? WithScope<S> : unknown)
+    [CombinedScope<K, S>] extends [infer Scp extends Scope] ? (
+        [Dependency] extends [Sync] ? never :
+        & DepPair<IsSync<K>, Sync>
+        & ([Scp] extends [never] ? unknown : WithScope<Scp>)
+    ) : never
 
 interface _Container<in P> {
     [_depsTag]: ((d: P) => void) | null
@@ -260,6 +269,15 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return new Container<any>(newOptions)
     }
 
+    _hasScope(scope: Scope): boolean {
+        if (this.scopes.includes(scope)) return true
+        return (this._parent?._hasScope(scope)) ?? false
+    }
+
+    _missingScopes(scopes: Scope[]): Scope[] {
+        return scopes.filter(s => !this._hasScope(s))
+    }
+
     // Add a `TypeKey` provider to the _providers set
     private _setKeyProvider<T, K extends AnyKey = any>(key: TypeKey<T>, entry: Entry<T, P, K>) {
         this._providers.set(key, entry)
@@ -286,8 +304,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
 
                 const binding = key.defaultInit
                 if (binding != undefined) {
-
-                    const scope = key.scope
+                    const scope = key.scope && Scopes.flatten(key.scope)
                     // Use the default provider if available for this key
                     entry = { value: { binding, scope } }
                     break
@@ -303,38 +320,22 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         if ('instance' in value) return { sync: true, init: () => value.instance }
         if ('promise' in value) return { sync: false, init: () => value.promise }
 
-        // Pick the appropriate container from this or its ancestors to retrieve the dependencies
-        // If this entry has no scope, use the current container. Otherwise, find a container that contains the scope
-        let dependencyContainer: Container<any>
-        if (value.scope != undefined) {
-            let scopeContainer: Container<any> | undefined = this
-            let providerOutsideScope = true
-            while (!scopeContainer.scopes.includes(value.scope)) {
-                if (scopeContainer === entryContainer) {
-                    // if we've traversed back to the entryContainer and not found the scope,
-                    // that means the provider is defined in an descendant of the container with the scope,
-                    // if the scope exists at all
-                    providerOutsideScope = false
-                }
-                scopeContainer = scopeContainer?._parent
-                if (scopeContainer == undefined) return new ScopeUnavailableError(value.scope)
-            }
-            if (providerOutsideScope || entryContainer == undefined) {
-                // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
-                // don't store the instance in the ancestor.
-                // do this by creating a new Entry so changes to value don't affect the original entry.value
-                entry = { value }
-                scopeContainer._setKeyProvider(key, entry)
-                dependencyContainer = scopeContainer
-            } else {
-                // The provider was defined in a subcontainer of the scope.
-                // This means values available to entryContainer can't bleed into a parent container,
-                // so it's safe to use dependencies available to entryContainer but not scopeContainer.
-                // This allows you to, for example, provide types with Singleton scope in a non-root container
-                // and still have access to dependencies provided to that container.
+        let dependencyContainer: Container<any> = this
+        if (value.scope?.length) {
+            const missingScopes = this._missingScopes(value.scope)
+            if (missingScopes.length > 0) return new ScopeUnavailableError(missingScopes)
 
-                // Basically we'll grab the the dependencies from the most recent of entryContainer and scopeContainer
-                dependencyContainer = entryContainer
+            while (dependencyContainer._parent != undefined) {
+                if (dependencyContainer === entryContainer) break
+                if (value.scope.some(s => dependencyContainer.scopes.includes(s))) {
+                    // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
+                    // don't store the instance in the ancestor.
+                    // do this by creating a new Entry so changes to value don't affect the original entry.value
+                    entry = { value }
+                    dependencyContainer._setKeyProvider(key, entry)
+                    break
+                }
+                dependencyContainer = dependencyContainer._parent
             }
         } else {
             dependencyContainer = this
@@ -456,11 +457,11 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         SrcK extends AnyKey = any,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
-        S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
+        S extends Scope = never,
     >(
         key: K,
         ...args: [
-            ...scope: [scope: S] | [],
+            ...scope: [scope: Scopes<S>] | [],
             ...init:
             | [BaseKey<Actual<K>, any, D, P, Sync>]
             | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
@@ -472,7 +473,14 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     >> {
         type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
-        const scope = Scope.isScope(args[0]) ? args[0] : key.scope
+        const keyScope = key.scope
+        const provideScope = Scope.isScope(args[0]) ? args[0] : undefined
+
+        let scope: Scope[] = []
+        if (keyScope || provideScope) {
+            scope = Scopes.flatten([keyScope ?? [], provideScope ?? []])
+        }
+
         let entry: Entry<T, P, AnyKey>
 
         if (typeof args[args.length - 1] == 'function') {
@@ -509,11 +517,11 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         K extends TypeKey<any> | InjectableClass<any>,
         SrcK extends AnyKey = any,
         D extends Dependency = DepsOf<SrcK>,
-        S extends Scope = K extends { scope: infer A extends Scope } ? A : never,
+        S extends Scope = never,
     >(
         key: K,
         ...args: [
-            ...scope: [scope: S] | [],
+            ...scope: [scope: Scopes<S>] | [],
             ...init:
             | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
             | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>],

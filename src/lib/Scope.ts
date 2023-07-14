@@ -19,10 +19,20 @@ export interface Scope {
 }
 
 export namespace Scope {
-    export function isScope(target: any): target is Scope {
-        return 'scopeTag' in target && typeof target.scopeTag == 'symbol'
+    export function isScope(target: any): target is Scopes {
+        if ('scopeTag' in target && typeof target.scopeTag == 'symbol') return true
+        if (target instanceof Array) return target.every(isScope)
+        return false
     }
 }
 
 /** The default scope for top-level containers. */
 export class Singleton extends Scope() { static readonly scopeTag = Symbol(); }
+
+export type Scopes<Scp extends Scope = Scope> = Scp | Scopes<Scp>[]
+
+export namespace Scopes {
+    export function flatten<Scp extends Scope>(scopes: Scopes<Scp>): Scp[] {
+        return scopes instanceof Array ? scopes.flatMap(flatten) as Scp[] : [scopes]
+    }
+}
