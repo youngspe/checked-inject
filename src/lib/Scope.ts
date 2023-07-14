@@ -29,7 +29,7 @@ export namespace Scope {
 /** The default scope for top-level containers. */
 export class Singleton extends Scope() { static readonly scopeTag = Symbol(); }
 
-export type Scopes<Scp extends Scope = Scope> = Scp | Scopes<Scp>[]
+export type Scopes<Scp extends Scope = Scope> = Scp | readonly Scopes<Scp>[]
 
 export namespace Scopes {
     export function flatten<Scp extends Scope>(scopes: Scopes<Scp>): Scp[] {

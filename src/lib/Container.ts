@@ -100,9 +100,7 @@ export type CanRequest<
     P extends ProvideGraph,
     K extends AnyKey,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> =
-    & Container<P>
-    & ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
+> = ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
 type GraphWithKeys<K extends Dependency> =
     | FlatGraph<K extends any ? DepPair<K, any> : never>
@@ -205,6 +203,13 @@ interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
 
 export interface FlatGraph<Pairs extends GraphPairs = GraphPairs> extends BaseProvideGraph<Pairs> { }
 
+export type DefaultGraph<S extends Scope = never> = FlatGraph<
+    | DepPair<typeof Singleton, never>
+    | DepPair<typeof Container.Key, never>
+    | DepPair<IsSync<typeof Container.Key>, never>
+    | (S extends any ? DepPair<S, never> : never)
+>
+
 export interface ChildGraph<
     out Parent extends ProvideGraph,
     Pairs extends GraphPairs = GraphPairs,
@@ -257,16 +262,11 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: readonly S[] | S } = {}): Container<FlatGraph<
-        | DepPair<typeof Singleton, never>
-        | DepPair<typeof Container.Key, never>
-        | DepPair<IsSync<typeof Container.Key>, never>
-        | (S extends any ? DepPair<S, never> : never)
-    >> {
+    static create<S extends Scope = never>(options: { scope?: Scopes<S> } = {}): Container<DefaultGraph<S>> {
         let { scope = [] } = options
-        let scopeWithSingleton = scope instanceof Array ? [Singleton, ...scope] : [Singleton, scope]
+        let scopeWithSingleton = [Singleton, ...Scopes.flatten(scope)]
         const newOptions: { scope: Scope[] } = { scope: scopeWithSingleton }
-        return new Container<any>(newOptions)
+        return new Container(newOptions)
     }
 
     _hasScope(scope: Scope): boolean {
@@ -556,8 +556,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return this as any
     }
 
-    /** Requests the dependency or dependencies defined by `deps`, or throws if any transitive dependencies are not provided. */
-    readonly request = function <K extends AnyKey, Th extends CanRequest<P, K>>(this: Th, deps: K): ContainerActual<K, P> {
+    requestUnchecked<K extends AnyKey>(deps: K): ContainerActual<K, P> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
             throw provider
@@ -568,16 +567,24 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return provider.init()
     }
 
-    readonly requestAsync = function <
-        K extends AnyKey,
-        Th extends CanRequest<P, K, never>,
-    >(this: Th, deps: K): Promise<ContainerActual<K, P>> {
+    requestAsyncUnchecked<K extends AnyKey>(deps: K): Promise<ContainerActual<K, P>> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
             throw provider
         }
         return Promise.resolve(provider.init())
     }
+
+    /** Requests the dependency or dependencies defined by `deps`, or throws if any transitive dependencies are not provided. */
+    readonly request = this.requestUnchecked as <K extends AnyKey, Th extends CanRequest<P, K>>(
+        this: Container<P> & Th,
+        deps: K,
+    ) => ContainerActual<K, P>
+
+    readonly requestAsync = this.requestAsyncUnchecked as <K extends AnyKey, Th extends CanRequest<P, K>>(
+        this: Container<P> & Th,
+        deps: K,
+    ) => Promise<ContainerActual<K, P>>
 
     /** Returns a child of this container, after executing `f` with it. */
     createChild(): Container<ChildGraph<P, never>> {
@@ -595,20 +602,22 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Apply a list of `Module`s to this container. */
-    apply<M extends Module[]>(...modules: M): Container<Merge<P, ModuleProvides<M>>> {
+    apply<M extends ModuleItem[]>(...modules: M): Container<Merge<P, ModuleProvides<M>>> {
         for (let mod of modules) {
-            if (typeof mod == 'function') {
+            if (mod instanceof Array) {
+                mod.forEach(m => this.apply(m as any))
+            } else if (typeof mod == 'function') {
                 mod(this as any)
             } else {
-                mod.forEach(m => this.apply(m as any))
+                mod.applyTo(this)
             }
         }
         return this as Container<any>
     }
 
     /** Calls the given function with the requested dependencies and returns its output. */
-    readonly inject = function <K extends AnyKey, R, Th extends CanRequest<P, K>>(
-        this: Th,
+    inject<K extends AnyKey, R, Th extends CanRequest<P, K>>(
+        this: Container<P> & Th,
         deps: K,
         f: (deps: ContainerActual<K, P>) => R,
     ): R {
@@ -616,13 +625,13 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
-    readonly build = function <
+    build<
         K extends AnyKey,
         Th extends CanRequest<P, K>,
         Args extends ContainerActual<K, P> extends (...args: infer A) => Out ? A : never,
         Out = ContainerActual<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(
-        this: Th,
+        this: Container<P> & Th,
         deps: K,
         ...args: Args
     ): Out {
@@ -641,19 +650,79 @@ export namespace Container {
 }
 
 /** Implementation of a module that performs operations on a given `Container`. */
-export interface FunctionModule {
-    (ct: Container<FlatGraph<never>>): Container<any>
+export interface FunctionModuleItem<P extends ProvideGraph = any> {
+    (ct: Container<FlatGraph<never>>): Container<P>
+}
+
+type ModuleItem = FunctionModuleItem | ApplyTo | readonly ModuleItem[]
+
+interface ApplyTo<P extends ProvideGraph = any> {
+    applyTo(ct: Container<any>): Container<P>
 }
 
 /** An object used to provide definitions to a `Container` */
-export type Module = FunctionModule | readonly Module[]
+export interface Module<P extends ProvideGraph = any> extends ApplyTo<P> {
+    readonly [unresolved]?: ['missing dependencies:']
 
-export function Module<M extends Module[]>(...m: M): M {
-    return m
+    inject<K extends AnyKey, R, Th extends & CanRequest<Merge<DefaultGraph, P>, K>>(
+        this: ApplyTo<P> & Th,
+        deps: K,
+        f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R,
+    ): R
+
+    injectAsync<K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
+        this: ApplyTo<P> & Th,
+        deps: K,
+        f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R,
+    ): Promise<R>
+}
+
+class _Module<P extends ProvideGraph> implements Module<P> {
+    readonly [unresolved]?: ['missing dependencies:']
+    private readonly _items: ModuleItem[]
+
+    constructor(items: ModuleItem[]) {
+        this._items = items
+    }
+
+    applyTo(ct: Container<any>) {
+        for (let item of this._items) {
+            if (item instanceof Array) {
+                for (let x of item) { ct.apply(x) }
+            } else if (typeof item == 'function') {
+                item(ct)
+            } else {
+                item.applyTo(ct)
+            }
+        }
+        return ct as Container<P>
+    }
+
+    readonly inject = function <K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
+        this: ApplyTo<P> & Th,
+        deps: K,
+        f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R,
+    ): R {
+        const val = Container.create().apply(this as ApplyTo<P>).requestUnchecked(deps)
+        return f(val)
+    }
+
+    readonly injectAsync = function <K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
+        this: ApplyTo<P> & Th,
+        deps: K,
+        f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R | Promise<R>,
+    ): Promise<R> {
+        return Container.create().apply(this as ApplyTo<P>).requestAsyncUnchecked(deps).then(f)
+    }
+}
+
+export function Module<M extends ModuleItem[]>(...m: M): Module<ModuleProvides<M>> {
+    return new _Module(m)
 }
 
 export type ModuleProvides<M> =
-    M extends (ct: Container<FlatGraph<never>>) => Container<infer P> ? P :
+    M extends ApplyTo<infer P> | FunctionModuleItem<infer P> ? P :
+    M extends readonly [infer A] ? ModuleProvides<A> :
     M extends readonly [infer A, ...infer B] ? Merge<ModuleProvides<A>, ModuleProvides<B>> :
     M extends [] ? FlatGraph<never> :
     never

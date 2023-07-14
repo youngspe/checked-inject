@@ -8,11 +8,7 @@ class BooleanKey extends TypeKey<boolean>() { static readonly keyTag = Symbol() 
 describe(Container, () => {
     test('provide and request', () => {
         const target = Container.create().provide(NumberKey, {}, () => 10)
-        type X = (typeof target extends Container<ProvideGraph<infer Pairs>> ? Pairs : never)
-        type Y<X, K> = [X] extends [{ key: K, deps: infer D }] ? X : 'foo'
-        type Z = Y<X, typeof NumberKey>
-
-        const out = target.request(NumberKey);
+        const out = target.request(NumberKey)
 
         expect(out).toEqual(10)
     })
