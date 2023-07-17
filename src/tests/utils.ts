@@ -10,3 +10,7 @@ export type Equal<A> =
     unknown
 
 export type Extends<Sub, Super> = Sub extends Super ? true : false
+
+export function sleep(ms: number): Promise<void> {
+    return new Promise(done => setTimeout(done, ms))
+}

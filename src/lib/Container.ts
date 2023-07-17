@@ -64,6 +64,7 @@ export class ScopeUnavailableError extends InjectError {
 interface EntryInit<T, P extends ProvideGraph, K extends AnyKey> {
     scope?: Scope[]
     binding: BaseKey<T, K, any, P, any>
+    sync: boolean
 }
 
 interface EntryInstance<T> {
@@ -306,7 +307,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
                 if (binding != undefined) {
                     const scope = key.scope && Scopes.flatten(key.scope)
                     // Use the default provider if available for this key
-                    entry = { value: { binding, scope } }
+                    entry = { value: { binding, scope, sync: true } }
                     break
                 }
 
@@ -351,11 +352,14 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         const initializer = value.binding.init(depsResult)
 
         if (initializer instanceof InjectError) return new DependencyFailedError(initializer)
-        if (!valueScope) return initializer
+        if (!valueScope) return value.sync ? initializer : {
+            init: () => initializer.init(),
+            sync: false,
+        } as Initializer<T>
         let init = nullable(initializer)
 
         const provider: Initializer.Base<T> = {
-            sync: initializer.sync, init() {
+            sync: initializer.sync && value.sync, init() {
                 try {
                     if ('instance' in entry.value) return entry.value.instance
                     if ('promise' in entry.value) return entry.value.promise
@@ -444,11 +448,18 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         }
 
         return {
-            sync: false, init: async () => {
+            sync: false, async init() {
+                const promises = (arrayLength == null ? {} : new Array(arrayLength)) as unknown as {
+                    [X in keyof _T]?: _T[X] | Promise<_T[X]>
+                }
                 const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
 
                 for (let prop in providers) {
-                    out[prop] = await providers[prop]!.init()
+                    promises[prop] = providers[prop]!.init()
+                }
+
+                for (let prop in promises) {
+                    out[prop] = await promises[prop]
                 }
 
                 return out as T
@@ -457,29 +468,28 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     }
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
-    provide<
+    private _provide<
         K extends TypeKey<any> | InjectableClass<any>,
-        SrcK extends AnyKey = any,
+        SrcK extends AnyKey = undefined,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
         S extends Scope = never,
     >(
+        sync: boolean,
         key: K,
         ...args: [
             ...scope: [scope: Scopes<S>] | [],
             ...init:
             | [BaseKey<Actual<K>, any, D, P, Sync>]
-            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
+            | [...deps: [SrcK] | [], init: (deps: ContainerActual<SrcK, P>) => Actual<K>],
         ]
-    ): Container<Provide<
-        P,
-        | PairForProvide<K, D, S>
-        | PairForProvideIsSync<K, Sync, S>
-    >> {
+    ): this {
         type T = Actual<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
         const keyScope = key.scope
-        const provideScope = Scope.isScope(args[0]) ? args[0] : undefined
+        const scopeIndex = 0 as const
+        const provideScope = Scope.isScope(args[scopeIndex]) ? args[scopeIndex] : undefined
+        const hasScopeArg = provideScope != undefined
 
         let scope: Scope[] | undefined = undefined
         if (keyScope || provideScope) {
@@ -492,12 +502,15 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         let entry: Entry<T, P, AnyKey>
 
         if (typeof args[args.length - 1] == 'function') {
-            const deps = args[args.length - 2] as SrcK
+            const hasDepsArg = args.length - (hasScopeArg ? 1 : 0) >= 2
+
+            const deps = hasDepsArg ? args[args.length - 2] as SrcK : undefined as SrcK
             const init = args[args.length - 1] as (deps: ContainerActual<SrcK, P>) => T
             entry = {
                 value: {
                     binding: Inject.map(deps, init),
                     scope,
+                    sync,
                 }
             }
         } else {
@@ -511,6 +524,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
                     value: {
                         binding,
                         scope,
+                        sync,
                     }
                 }
             }
@@ -518,12 +532,34 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
 
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
         this._setKeyProvider(_key, entry)
-        return this as any
+        return this
+    }
+
+    provide<
+        K extends TypeKey<any> | InjectableClass<any>,
+        SrcK extends AnyKey = undefined,
+        D extends Dependency = DepsOf<SrcK>,
+        Sync extends Dependency = RequireSync<D>,
+        S extends Scope = never,
+    >(
+        key: K,
+        ...args: [
+            ...scope: [scope: Scopes<S>] | [],
+            ...init:
+            | [BaseKey<Actual<K>, any, D, P, Sync>]
+            | [...deps: [SrcK] | [], init: (deps: ContainerActual<SrcK, P>) => Actual<K>]
+        ]
+    ): Container<Provide<
+        P,
+        | PairForProvide<K, D, S>
+        | PairForProvideIsSync<K, Sync, S>
+    >> {
+        return this._provide(true, key, ...args) as any
     }
 
     provideAsync<
         K extends TypeKey<any> | InjectableClass<any>,
-        SrcK extends AnyKey = any,
+        SrcK extends AnyKey = undefined,
         D extends Dependency = DepsOf<SrcK>,
         S extends Scope = never,
     >(
@@ -532,11 +568,10 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
             ...scope: [scope: Scopes<S>] | [],
             ...init:
             | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
-            | [deps: SrcK, init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>],
+            | [...deps: [SrcK] | [], init: (deps: ContainerActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>]
         ]
     ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
-        this.provide(key as any, ...args)
-        return this as any
+        return this._provide(false, key as any, ...args) as any
     }
 
     /** Registers 'key' to provide the given `instance`. */
@@ -624,6 +659,14 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return f(this.request(deps))
     }
 
+    injectAsync<K extends AnyKey, R, Th extends CanRequest<P, K>>(
+        this: Container<P> & Th,
+        deps: K,
+        f: (deps: ContainerActual<K, P>) => R | Promise<R>,
+    ): Promise<R> {
+        return this.requestAsync(deps).then(f)
+    }
+
     /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
     build<
         K extends AnyKey,
@@ -670,7 +713,7 @@ export interface Module<P extends ProvideGraph = any> extends ApplyTo<P> {
         f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R,
     ): R
 
-    injectAsync<K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
+    injectAsync<K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K, never>>(
         this: ApplyTo<P> & Th,
         deps: K,
         f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R,
@@ -707,7 +750,7 @@ class _Module<P extends ProvideGraph> implements Module<P> {
         return f(val)
     }
 
-    readonly injectAsync = function <K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
+    readonly injectAsync = function <K extends AnyKey, R, Th extends CanRequest<Merge<DefaultGraph, P>, K, never>>(
         this: ApplyTo<P> & Th,
         deps: K,
         f: (deps: ContainerActual<K, Merge<DefaultGraph, P>>) => R | Promise<R>,
