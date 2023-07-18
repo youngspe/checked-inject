@@ -26,13 +26,6 @@ interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
 /** @internal */
 export interface FlatGraph<Pairs extends GraphPairs = GraphPairs> extends BaseProvideGraph<Pairs> { }
 
-export type DefaultGraph<S extends Scope = never> = FlatGraph<
-    | DepPair<typeof Singleton, never>
-    | DepPair<typeof Container.Key, never>
-    | DepPair<IsSync<typeof Container.Key>, never>
-    | (S extends any ? DepPair<S, never> : never)
->
-
 export interface ChildGraph<
     out Parent extends ProvideGraph,
     Pairs extends GraphPairs = GraphPairs,

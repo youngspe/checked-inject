@@ -1,10 +1,8 @@
-import { InjectError } from './Container'
+import { InjectError, Container } from './Container'
 import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
-import { ProvideGraph } from './ProvideGraph'
-
 
 const _computedKeySymbol = Symbol()
 
@@ -19,7 +17,7 @@ export abstract class ComputedKey<
     out T = any,
     out K extends DependencyKey = any,
     D extends Dependency = DepsOf<K>,
-    P extends ProvideGraph = never,
+    P extends Container.Graph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
 > extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
     /** @internal */

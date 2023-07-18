@@ -1,6 +1,8 @@
 import { Inject } from './Inject'
 import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
-import { ProvideGraph } from './ProvideGraph'
+import { Container } from './Container'
+
+import ProvideGraph = Container.Graph
 
 /** @internal */
 export abstract class AbstractKey {

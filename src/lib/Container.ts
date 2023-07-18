@@ -1,13 +1,13 @@
-import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault, TypeKey } from './TypeKey'
+import { BaseTypeKey, TypeKey } from './TypeKey'
 import { ComputedKey } from './ComputedKey'
 import { Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
-import { Actual, ProvidedActual, DepsOf, IsSyncDepsOf, UnableToResolve, DependencyKey } from './DependencyKey'
+import { Actual, ProvidedActual, DepsOf, DependencyKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
-import { ChildGraph, DefaultGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
+import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, unresolved } from './CanRequest'
 
 /** Represents a possible error when resolving a dependency. */
@@ -113,7 +113,7 @@ const _classTypeKey = Symbol()
 const _depsTag = Symbol()
 
 /** The dependency injection container for `structured-injection`. */
-export class Container<P extends ProvideGraph> {
+export class Container<P extends Container.Graph> {
     /** @internal */
     [unresolved]!: ['missing dependencies:']
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
@@ -129,7 +129,7 @@ export class Container<P extends ProvideGraph> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
-    static create<S extends Scope = never>(options: { scope?: ScopeList<S> } = {}): Container<DefaultGraph<S>> {
+    static create<S extends Scope = never>(options: { scope?: ScopeList<S> } = {}): Container<Container.DefaultGraph<S>> {
         let { scope = [] } = options
         let scopeWithSingleton = [Singleton, ...ScopeList.flatten(scope)]
         const newOptions: { scope: Scope[] } = { scope: scopeWithSingleton }
@@ -510,7 +510,7 @@ export class Container<P extends ProvideGraph> {
             } else if (typeof mod == 'function') {
                 mod(this as any)
             } else {
-                mod.applyTo(this)
+                mod.applyTo(this as any)
             }
         }
         return this as Container<any>
@@ -544,7 +544,7 @@ export class Container<P extends ProvideGraph> {
         deps: K,
         ...args: Args
     ): Out {
-        return (this.requestUnchecked(deps) as (...args: Args) => Out)(...args)
+        return this.requestUnchecked(deps)(...args)
     }
 
     buildAsync<
@@ -556,17 +556,83 @@ export class Container<P extends ProvideGraph> {
         this: Container<P> & Th,
         deps: K,
         ...args: Args
-    ): Promise<Out> {
-        return (this.requestAsyncUnchecked(deps) as Promise<(...args: Args) => Out>).then(f => f(...args))
+    ): Promise<Awaited<Out>> {
+        return this.requestAsyncUnchecked(deps).then(f => f(...args))
     }
 }
 
 export namespace Container {
-    export class Key extends TypeKey<Container<FlatGraph<never>>>({ name: Container.name }) { static readonly keyTag = Symbol() }
+    export class Key extends TypeKey<Container<Graph.Flat<never>>>({ name: Container.name }) { static readonly keyTag = Symbol() }
     export const inject = Inject.from(Key)
 
     /** A function that returns a new subcomponent instance using the given arguments. */
-    export interface Subcomponent<Args extends any[], P extends ProvideGraph = never> {
+    export interface Subcomponent<Args extends any[], P extends Graph = never> {
         (...arg: Args): Container<P>
+    }
+
+    export type Graph<E extends Graph.Edges = Graph.Edges> = ProvideGraph<E>
+
+    export namespace Graph {
+        export type Flat<E extends Edges = Edges> = FlatGraph<E>
+        export type Child<Parent extends Graph, E extends Edges = Edges> = ChildGraph<Parent, E>
+        export type Edges = GraphPairs
+    }
+
+    export type DefaultGraph<S extends Scope = never> = FlatGraph<
+        | DepPair<typeof Singleton, never>
+        | DepPair<typeof Container.Key, never>
+        | DepPair<IsSync<typeof Container.Key>, never>
+        | (S extends any ? DepPair<S, never> : never)
+    >
+
+    export interface Builder<P extends Graph = Graph.Flat<never>> {
+        /** @internal */
+        readonly [_depsTag]: ((d: P) => void) | null
+
+        provide<
+            K extends TypeKey<any> | InjectableClass<any>,
+            SrcK extends DependencyKey = undefined,
+            D extends Dependency = DepsOf<SrcK>,
+            Sync extends Dependency = RequireSync<D>,
+            S extends Scope = never,
+        >(
+            key: K,
+            ...args: [
+                ...scope: [scope: ScopeList<S>] | [],
+                ...init:
+                | [ComputedKey<Actual<K>, any, D, P, Sync>]
+                | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
+            ]
+        ): Builder<Provide<
+            P,
+            | PairForProvide<K, D, S>
+            | PairForProvideIsSync<K, Sync, S>
+        >>
+
+        provideAsync<
+            K extends TypeKey<any> | InjectableClass<any>,
+            SrcK extends DependencyKey = undefined,
+            D extends Dependency = DepsOf<SrcK>,
+            S extends Scope = never,
+        >(
+            key: K,
+            ...args: [
+                ...scope: [scope: ScopeList<S>] | [],
+                ...init:
+                | [ComputedKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
+                | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>]
+            ]
+        ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
+
+        /** Registers 'key' to provide the given `instance`. */
+        provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Builder<
+            Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
+        >
+
+        addScope<S extends Scope>(...scope: S[]): Builder<
+            Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
+        >
+
+        apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
     }
 }

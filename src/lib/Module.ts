@@ -1,7 +1,11 @@
 import { DependencyKey, ProvidedActual } from './DependencyKey'
 import { Container } from './Container'
-import { ProvideGraph, FlatGraph, Merge, DefaultGraph } from './ProvideGraph'
+import { Merge } from './ProvideGraph'
 import { unresolved, CanRequest } from './CanRequest'
+
+import DefaultGraph = Container.DefaultGraph
+import ProvideGraph = Container.Graph
+import FlatGraph = ProvideGraph.Flat
 
 function requestForModule<P extends ProvideGraph, K extends DependencyKey>(
     mod: Module.ApplyTo<P>,
@@ -23,7 +27,7 @@ type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = ProvidedAct
 export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {
     readonly [unresolved]?: ['missing dependencies:']
 
-    abstract applyTo(ct: Container<any>): Container<P>
+    abstract applyTo(ct: Container.Builder<any>): Container<P>
 
     request<K extends DependencyKey, Th extends CanRequest<Merge<DefaultGraph, P>, K>>(
         this: this & Th,
@@ -85,7 +89,7 @@ class ListModule<P extends ProvideGraph> extends BaseModule<P> {
         this._items = items
     }
 
-    override applyTo(ct: Container<any>) {
+    override applyTo(ct: Container.Builder<any>) {
         for (let item of this._items) {
             if (item instanceof Array) {
                 for (let x of item) { ct.apply(x); }
@@ -107,8 +111,8 @@ export function Module<M extends Module.Item[]>(...m: M): Module<Module.Provides
 
 export namespace Module {
     /** Implementation of a module that performs operations on a given `Container`. */
-    export interface FunctionItem<P extends ProvideGraph = any> {
-        (ct: Container<FlatGraph<never>>): Container<P>
+    export interface FunctionItem<P extends FlatGraph = any> {
+        (ct: Container.Builder): Container.Builder<P>
     }
     export type Item = FunctionItem | ApplyTo | readonly Item[]
 
@@ -120,7 +124,6 @@ export namespace Module {
         never
 
     export interface ApplyTo<P extends ProvideGraph = any> {
-        applyTo(ct: Container<any>): Container<P>
+        applyTo(ct: Container.Builder<any>): Container<P>
     }
-
 }
