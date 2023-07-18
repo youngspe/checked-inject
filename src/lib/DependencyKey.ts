@@ -1,9 +1,8 @@
-import { HasAbstractKeySymbol } from './AbstractKey'
 import { HasBaseKeySymbol } from './BaseKey'
 import { Container, Merge, ProvideGraph } from './Container'
 import { Scope } from './Scope'
 import { PrivateConstruct } from './_internal'
-import { BaseTypeKey } from './TypeKey'
+import { BaseTypeKey, HasTypeKeySymbol } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync } from './Dependency'
 
@@ -18,17 +17,35 @@ export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> = 
 } : never
 
 /** An array representing a structured set of type keys to produce type `T`. */
-export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> = T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] : T extends [] ? [] : T extends readonly any[] ? DependencyKey[] & {
-    readonly [K in Extract<keyof T, number>]: DependencyKey.Of<T[K], D, Sync>
-} : never
+export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
+    T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
+    T extends [] ? [] :
+    T extends readonly any[] ? DependencyKey[] & {
+        readonly [K in Extract<keyof T, number>]: DependencyKey.Of<T[K], D, Sync>
+    } :
+    never
 
 /** A structured set of type keys to produce type `T`. */
-export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> = ObjectKey<T, D, Sync> | ArrayKey<T, D, Sync>
-export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> = BaseTypeKey<T> |
-    HasBaseKeySymbol<T, D, Sync>
+export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> =
+    | ObjectKey<T, D, Sync>
+    | ArrayKey<T, D, Sync>
+export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
+    | BaseTypeKey<T>
+    | HasBaseKeySymbol<T, D, Sync>
 
 /** The actual type that a dependency key of type `D` resolves to. */
-export type Actual<K extends DependencyKey> = K extends DependencyKey.Of<infer _T> ? (K extends HasAbstractKeySymbol<infer T> ? T : K extends InjectableClass<infer T> ? T : K extends StructuredKey<infer T> ? T : _T) : K extends readonly any[] ? ArrayActual<K> : K extends OnlyObject<DependencyKey> ? ObjectActual<K> : K extends undefined ? undefined : K extends null ? null : K extends void ? void : never
+export type Actual<K extends DependencyKey> =
+    K extends DependencyKey.Of<infer _T> ? (
+        K extends HasBaseKeySymbol<infer T> | HasTypeKeySymbol<infer T> ? T :
+        K extends InjectableClass<infer T> ? T :
+        K extends StructuredKey<infer T> ? T :
+        _T
+    ) :
+    K extends readonly any[] ? ArrayActual<K> :
+    K extends OnlyObject<DependencyKey> ? ObjectActual<K> :
+    K extends undefined ? undefined : K extends null ? null :
+    K extends void ? void :
+    never
 
 type ArrayActual<K extends readonly DependencyKey[]> = K extends [] ? [] : K extends readonly [infer A extends DependencyKey, ...infer B extends DependencyKey[]] ? [Actual<A>, ...ArrayActual<B>] : K extends readonly (infer A extends DependencyKey)[] ? Actual<A>[] : never
 
@@ -57,11 +74,11 @@ export type DepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? Unab
 
 export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> : K extends Scope ? UnableToResolveIsSync<K> : K extends BaseTypeKey | InjectableClass ? IsSync<K> : K extends DependencyKey.Of<infer _T, any, never> ? never : K extends DependencyKey.Of<infer _T, any, infer D> ? D : K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> : K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> : UnableToResolveIsSync<K>
 
-
 export type DependencyKey =
     | OnlyObject<DependencyKey>
     | DependencyKey[]
-    | HasAbstractKeySymbol<any>
+    | HasBaseKeySymbol<any>
+    | HasTypeKeySymbol<any>
     | PrivateConstruct
     | null | undefined | void
 

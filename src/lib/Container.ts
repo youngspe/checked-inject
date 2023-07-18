@@ -463,7 +463,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
                 }
 
                 for (let prop in promises) {
-                    out[prop] = await promises[prop]
+                    out[prop] = providers[prop]!.sync ? promises[prop] as _T[keyof _T] : await promises[prop]
                 }
 
                 return out as T
@@ -620,7 +620,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         deps: K,
     ) => ProvidedActual<K, P>
 
-    readonly requestAsync = this.requestAsyncUnchecked as <K extends DependencyKey, Th extends CanRequest<P, K>>(
+    readonly requestAsync = this.requestAsyncUnchecked as <K extends DependencyKey, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
     ) => Promise<ProvidedActual<K, P>>
@@ -663,7 +663,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return f(this.request(deps))
     }
 
-    injectAsync<K extends DependencyKey, R, Th extends CanRequest<P, K>>(
+    injectAsync<K extends DependencyKey, R, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
         f: (deps: ProvidedActual<K, P>) => R | Promise<R>,
@@ -687,7 +687,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
 
     buildAsync<
         K extends DependencyKey,
-        Th extends CanRequest<P, K>,
+        Th extends CanRequest<P, K, never>,
         Args extends ProvidedActual<K, P> extends (...args: infer A) => Out ? A : never,
         Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(

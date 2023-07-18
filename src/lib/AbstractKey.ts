@@ -2,16 +2,8 @@ import { ProvideGraph } from './Container'
 import { Inject } from './Inject'
 import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
 
-// Use this to prevent library consumers from generating types equivalent to `AbstractKey`.
-const _abstractKeySymbol: unique symbol = Symbol()
-
-export interface HasAbstractKeySymbol<out T> {
-    readonly [_abstractKeySymbol]: readonly [T] | null
-}
-
 /** Implementation detail--extend `BaseKey` instead. */
-export abstract class AbstractKey<out T> implements HasAbstractKeySymbol<T> {
-    readonly [_abstractKeySymbol]: readonly [T] | null = null
+export abstract class AbstractKey<out T>  {
     /** Requests a function returning a lazily-computed value of `T`. */
     Lazy = function <Th extends DependencyKey>(this: Th): Inject.GetLazy<Th> {
         return Inject.lazy<Th>(this)

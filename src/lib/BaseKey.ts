@@ -1,13 +1,13 @@
 import { InjectError, ProvideGraph } from './Container'
 import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
-import { AbstractKey, HasAbstractKeySymbol } from './AbstractKey'
+import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
 
 
 const _baseKeySymbol = Symbol()
 
-export interface HasBaseKeySymbol<out T, D = any, Sync = any> extends HasAbstractKeySymbol<T> {
+export interface HasBaseKeySymbol<out T, D = any, Sync = any> {
     readonly [_baseKeySymbol]: readonly [T, D, Sync] | null
 }
 

@@ -1,13 +1,13 @@
 import { Inject } from './Inject'
 import { BaseKey, HasBaseKeySymbol } from './BaseKey'
-import { AbstractKey, HasAbstractKeySymbol } from './AbstractKey'
+import { AbstractKey } from './AbstractKey'
 import { ScopeList } from './Scope'
 import { DependencyKey, Actual } from './DependencyKey'
 import { AbstractClass, Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
-export interface HasTypeKeySymbol<out T> extends HasAbstractKeySymbol<T> {
+export interface HasTypeKeySymbol<out T> {
     readonly [_typeKeySymbol]: readonly [T] | null
 }
 
