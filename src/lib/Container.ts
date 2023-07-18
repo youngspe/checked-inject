@@ -684,6 +684,19 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
     ): Out {
         return (this.request(deps) as (...args: Args) => Out)(...args)
     }
+
+    buildAsync<
+        K extends DependencyKey,
+        Th extends CanRequest<P, K>,
+        Args extends ProvidedActual<K, P> extends (...args: infer A) => Out ? A : never,
+        Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
+    >(
+        this: Container<P> & Th,
+        deps: K,
+        ...args: Args
+    ): Promise<Out> {
+        return (this.requestAsync(deps) as Promise<(...args: Args) => Out>).then(f => f(...args))
+    }
 }
 
 export namespace Container {

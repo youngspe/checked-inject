@@ -27,14 +27,6 @@ export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency
 export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> = BaseTypeKey<T> |
     HasBaseKeySymbol<T, D, Sync>
 
-
-export type DependencyKey =
-    | OnlyObject<DependencyKey>
-    | DependencyKey[]
-    | HasAbstractKeySymbol<any>
-    | PrivateConstruct
-    | null | undefined | void
-
 /** The actual type that a dependency key of type `D` resolves to. */
 export type Actual<K extends DependencyKey> = K extends DependencyKey.Of<infer _T> ? (K extends HasAbstractKeySymbol<infer T> ? T : K extends InjectableClass<infer T> ? T : K extends StructuredKey<infer T> ? T : _T) : K extends readonly any[] ? ArrayActual<K> : K extends OnlyObject<DependencyKey> ? ObjectActual<K> : K extends undefined ? undefined : K extends null ? null : K extends void ? void : never
 
@@ -65,10 +57,19 @@ export type DepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? Unab
 
 export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> : K extends Scope ? UnableToResolveIsSync<K> : K extends BaseTypeKey | InjectableClass ? IsSync<K> : K extends DependencyKey.Of<infer _T, any, never> ? never : K extends DependencyKey.Of<infer _T, any, infer D> ? D : K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> : K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> : UnableToResolveIsSync<K>
 
+
+export type DependencyKey =
+    | OnlyObject<DependencyKey>
+    | DependencyKey[]
+    | HasAbstractKeySymbol<any>
+    | PrivateConstruct
+    | null | undefined | void
+
 export namespace DependencyKey {
     /** A dependency key that, when requested, resolves to a value of type `T`. */
-    export type Of<T, D extends Dependency = any, Sync extends Dependency = any> = DependencyKey & (SimpleKey<T, D, Sync> |
-        InjectableClass<T> |
-        StructuredKey<T, D, Sync> |
-        (T extends (null | undefined | void) ? T : never))
+    export type Of<T, D extends Dependency = any, Sync extends Dependency = any> =
+        | SimpleKey<T, D, Sync>
+        | InjectableClass<T>
+        | StructuredKey<T, D, Sync>
+        | (T extends (null | undefined | void) ? T : never)
 }
