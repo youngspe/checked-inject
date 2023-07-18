@@ -1,29 +1,29 @@
-import { ProvideGraph } from './Container'
 import { Inject } from './Inject'
 import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
+import { ProvideGraph } from './ProvideGraph'
 
-/** Implementation detail--extend `ComputedKey` instead. */
-export abstract class AbstractKey  {
+/** @internal */
+export abstract class AbstractKey {
     /** Requests a function returning a lazily-computed value for this key. */
-    Lazy = function <Th extends DependencyKey>(this: Th): Inject.GetLazy<Th> {
+    Lazy<Th extends DependencyKey>(this: Th): Inject.GetLazy<Th> {
         return Inject.lazy<Th>(this)
     }
 
     /** Requests a function returning this key's output type. */
-    Provider = function <Th extends DependencyKey>(this: Th): Inject.GetProvider<Th> {
+    Provider<Th extends DependencyKey>(this: Th): Inject.GetProvider<Th> {
         return Inject.provider(this)
     }
 
     /** Requests a value for this key if provided, otherwise `undefined`. */
-    Optional = function <Th extends DependencyKey>(this: Th): Inject.Optional<Th> {
+    Optional<Th extends DependencyKey>(this: Th): Inject.Optional<Th> {
         return Inject.optional(this)
     }
 
-    Async = function <Th extends DependencyKey>(this: Th): Inject.Async<Th> {
+    Async<Th extends DependencyKey>(this: Th): Inject.Async<Th> {
         return Inject.async(this)
     }
 
-    Build = function <
+    Build<
         Th extends SimpleKey<(...args: Args) => Out>,
         Args extends any[],
         Out = Th extends SimpleKey<(...args: Args) => infer O> ? O : never
@@ -31,7 +31,7 @@ export abstract class AbstractKey  {
         return Inject.build(this, ...args)
     }
 
-    Map = function <
+    Map<
         Th extends DependencyKey,
         U,
         P extends ProvideGraph = never

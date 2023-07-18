@@ -7,6 +7,8 @@ import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
 import { Actual, ProvidedActual, DepsOf, IsSyncDepsOf, UnableToResolve, DependencyKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { ModuleItem, ModuleProvides } from './Module'
+import { ChildGraph, DefaultGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
+import { CanRequest, unresolved } from './CanRequest'
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -87,148 +89,6 @@ interface Entry<T, P extends ProvideGraph, K extends DependencyKey> {
     | EntryPromise<T>
 }
 
-const _classTypeKey = Symbol()
-
-export type UnresolvedKeys<
-    P extends ProvideGraph,
-    K extends DependencyKey,
-    Sync extends Dependency = IsSyncDepsOf<K>,
-> = DepsForKey<P, DepsOf<K> | Sync>
-
-export const unresolved = Symbol()
-
-export interface RequestFailed<K> {
-    [unresolved]: [(K extends any ? [K] : never)[0]]
-}
-
-export type CanRequest<
-    P extends ProvideGraph,
-    K extends DependencyKey,
-    Sync extends Dependency = IsSyncDepsOf<K>,
-> = ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
-
-type GraphWithKeys<K extends Dependency> =
-    | FlatGraph<K extends any ? DepPair<K, any> : never>
-    | ChildGraph<GraphWithKeys<K>, K extends any ? DepPair<K, any> : never>
-
-export type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
-
-type MergePairs<Old extends GraphPairs, New extends GraphPairs> = Exclude<Old, DepPair<New['key'], any>> | New
-
-export type Merge<Old extends ProvideGraph, New extends ProvideGraph> =
-    New extends ChildGraph<infer Parent, infer Pairs> ? ChildGraph<Merge<Old, Parent>, Pairs> :
-    New extends FlatGraph<infer Pairs> ? Provide<Old, Pairs> :
-    never
-
-export type Provide<P extends ProvideGraph, Pairs extends GraphPairs> =
-    P extends ChildGraph<infer Parent, infer OldPairs> ? ChildGraph<Parent, MergePairs<OldPairs, Pairs>> :
-    P extends FlatGraph<infer OldPairs> ? FlatGraph<MergePairs<OldPairs, Pairs>> :
-    never
-
-type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, D> extends never ? (
-    P extends ChildGraph<infer Parent> ? _FindGraphWithDep<Parent, D> : never
-) : P
-
-type ExcludeBroad<D extends Dependency> = D extends Extract<Dependency, D> ? never : D
-
-type FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = _FindGraphWithDep<P, ExcludeBroad<D>>
-
-type _DepsForKeyTransitive<
-    PRoot extends ProvideGraph,
-    K extends Dependency,
-    PCurrent extends ProvideGraph = PRoot,
-    Pairs extends GraphPairs = PairsOf<PCurrent>,
-> = K extends any ? (
-    K extends KeysOf<PCurrent> ? (Pairs extends DepPair<K, infer D> ? DepsForKey<
-        Pairs extends WithScope<infer Scp> ? FindGraphWithDep<PRoot, Scp | K> : PRoot,
-        D
-    > : never) :
-    PCurrent extends ChildGraph<infer Parent> ? _DepsForKeyTransitive<PRoot, K, Parent> :
-    UnableToResolve<['DepsForKeyTransitive', K, AllKeys<PRoot>]>
-) : never
-
-type DepsForKeyTransitive<
-    PRoot extends ProvideGraph,
-    K extends Dependency,
-> = K extends any ? _DepsForKeyTransitive<PRoot, K> : never
-
-type DepsForKeyScoped<P extends ProvideGraph, K, D extends Dependency> =
-    K extends WithScope<infer Scp> ? DepsForKey<FindGraphWithDep<P, Scp>, Scp | D> :
-    DepsForKey<P, D>
-
-type DepsForKeyIsSync<
-    P extends ProvideGraph,
-    K2 extends InjectableClass | BaseTypeKey,
-    K extends IsSync<K2>,
-> =
-    K2 extends PairsOf<P> ? K :
-    K2 extends KeyWithoutDefault ? never :
-    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K, Sync> :
-    UnableToResolve<['DepsForKeyIsSync', K]>
-
-type DepsForKeyFallback<
-    P extends ProvideGraph,
-    K extends Dependency,
-> =
-    K extends KeyWithoutDefault ? K :
-    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<P, K, D> :
-    K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
-    K
-
-type _DepsForKey<
-    P extends ProvideGraph,
-    K extends Dependency,
-> =
-    Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
-    K extends AllKeys<P> ? DepsForKeyTransitive<P, K> :
-    DepsForKeyFallback<P, K>
-
-type DepsForKey<
-    P extends ProvideGraph,
-    K extends Dependency,
-> = K extends any ? _DepsForKey<P, K> : never
-
-const _depsTag = Symbol()
-
-// Dependency pair
-interface DepPair<out K extends Dependency, D extends Dependency> {
-    deps: D
-    key: K
-}
-
-interface WithScope<Scp extends Scope> {
-    scope: ScopeList<Scp>
-}
-
-interface GraphPairs extends DepPair<Dependency, any> { }
-
-interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
-    pairs: Pairs
-}
-
-export interface FlatGraph<Pairs extends GraphPairs = GraphPairs> extends BaseProvideGraph<Pairs> { }
-
-export type DefaultGraph<S extends Scope = never> = FlatGraph<
-    | DepPair<typeof Singleton, never>
-    | DepPair<typeof Container.Key, never>
-    | DepPair<IsSync<typeof Container.Key>, never>
-    | (S extends any ? DepPair<S, never> : never)
->
-
-export interface ChildGraph<
-    out Parent extends ProvideGraph,
-    Pairs extends GraphPairs = GraphPairs,
-> extends BaseProvideGraph<Pairs> {
-    parent: Parent
-}
-
-export type ProvideGraph<Pairs extends GraphPairs = GraphPairs> =
-    | FlatGraph<Pairs>
-    | ChildGraph<ProvideGraph, Pairs>
-
-type PairsOf<P extends ProvideGraph> = P['pairs']
-type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
-
 type CombinedScope<K, S extends Scope> = Exclude<
     | S
     | (K extends { scope: infer A extends Scope } ? A : never),
@@ -248,21 +108,23 @@ type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends 
         & ([Scp] extends [never] ? unknown : WithScope<Scp>)
     ) : never
 
-interface _Container<in P> {
-    [_depsTag]: ((d: P) => void) | null
-}
+
+const _classTypeKey = Symbol()
+const _depsTag = Symbol()
 
 /** The dependency injection container for `structured-injection`. */
-export class Container<P extends ProvideGraph> implements _Container<P> {
+export class Container<P extends ProvideGraph> {
+    /** @internal */
     [unresolved]!: ['missing dependencies:']
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
     private readonly _parent?: Container<any>
+    /** @internal */
     readonly [_depsTag]: ((d: P) => void) | null = null
     private readonly scopes: Scope[]
 
-    protected constructor({ scope = [], parent }: { scope?: Scope[] | Scope, parent?: Container<any> } = {}) {
+    private constructor({ scope = [], parent }: { scope?: Scope[] | Scope, parent?: Container<any> } = {}) {
         this._parent = parent
         this.scopes = scope instanceof Array ? scope : [scope]
     }
@@ -274,12 +136,12 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         return new Container(newOptions)
     }
 
-    _hasScope(scope: Scope): boolean {
+    private _hasScope(scope: Scope): boolean {
         if (this.scopes.includes(scope)) return true
         return (this._parent?._hasScope(scope)) ?? false
     }
 
-    _missingScopes(scopes: Scope[]): Scope[] {
+    private _missingScopes(scopes: Scope[]): Scope[] {
         return scopes.filter(s => !this._hasScope(s))
     }
 
@@ -660,7 +522,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         deps: K,
         f: (deps: ProvidedActual<K, P>) => R,
     ): R {
-        return f(this.request(deps))
+        return f(this.requestUnchecked(deps))
     }
 
     injectAsync<K extends DependencyKey, R, Th extends CanRequest<P, K, never>>(
@@ -668,7 +530,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         deps: K,
         f: (deps: ProvidedActual<K, P>) => R | Promise<R>,
     ): Promise<R> {
-        return this.requestAsync(deps).then(f)
+        return this.requestAsyncUnchecked(deps).then(f)
     }
 
     /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
@@ -682,7 +544,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         deps: K,
         ...args: Args
     ): Out {
-        return (this.request(deps) as (...args: Args) => Out)(...args)
+        return (this.requestUnchecked(deps) as (...args: Args) => Out)(...args)
     }
 
     buildAsync<
@@ -695,7 +557,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         deps: K,
         ...args: Args
     ): Promise<Out> {
-        return (this.requestAsync(deps) as Promise<(...args: Args) => Out>).then(f => f(...args))
+        return (this.requestAsyncUnchecked(deps) as Promise<(...args: Args) => Out>).then(f => f(...args))
     }
 }
 

@@ -7,7 +7,10 @@ import { AbstractClass, Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
+/** @internal */
 export interface HasTypeKeySymbol<out T> {
+
+/** @internal */
     readonly [_typeKeySymbol]: readonly [T] | null
 }
 
@@ -17,6 +20,7 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 const _typeKeySymbol: unique symbol = Symbol()
 
 export interface BaseTypeKey<out T = any, Def extends HasComputedKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
+    /** @internal */
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: ScopeList
     readonly name: string
@@ -30,14 +34,19 @@ export interface TypeKey<out T = any, Def extends ComputedKey.Any<T> = any> exte
     readonly keyTag: symbol
 }
 
+/** @internal */
 export interface BaseTypeKeyWithoutDefault extends BaseTypeKey<any, never> { }
+
+/** @internal */
 export interface BaseTypeKeyWithDefault<
     out T,
     D extends Dependency,
     Sync extends Dependency,
 > extends BaseTypeKey<T, HasComputedKeySymbol<T, D, Sync>> { }
 
+/** @internal */
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
+/** @internal */
 export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
     | BaseTypeKeyWithDefault<T, D, Sync>
     | ClassWithDefault<T, D, Sync>

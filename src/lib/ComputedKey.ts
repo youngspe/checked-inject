@@ -1,13 +1,16 @@
-import { InjectError, ProvideGraph } from './Container'
+import { InjectError } from './Container'
 import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
+import { ProvideGraph } from './ProvideGraph'
 
 
 const _computedKeySymbol = Symbol()
 
+/** @internal */
 export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
+    /** @internal */
     readonly [_computedKeySymbol]: readonly [T, D, Sync] | null
 }
 
@@ -19,6 +22,7 @@ export abstract class ComputedKey<
     P extends ProvideGraph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
 > extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
+    /** @internal */
     readonly [_computedKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
     readonly inner: K
@@ -33,5 +37,6 @@ export abstract class ComputedKey<
 }
 
 export namespace ComputedKey {
+    /** @internal */
     export interface Any<out T = any> extends ComputedKey<T, any, any, any> { }
 }

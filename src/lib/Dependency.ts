@@ -6,15 +6,20 @@ import { InjectableClass } from './InjectableClass'
 
 const _isSyncSymbol = Symbol()
 
-export interface IsSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
-    [_isSyncSymbol]: K
+/** @internal */
+export abstract class IsSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
+    private [_isSyncSymbol]!: K
+    private constructor() { }
 }
 const _notSyncSymbol = Symbol()
 
-export interface NotSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
-    [_notSyncSymbol]: K
+/** @internal */
+export abstract class NotSync<out K extends BaseTypeKey<any> | InjectableClass<any>> {
+    private [_notSyncSymbol]!: K
+    private constructor() { }
 }
 
+/** @internal */
 export type RequireSync<D extends Dependency> = D extends BaseTypeKey | InjectableClass ? IsSync<D> : never
 
 export type Dependency =

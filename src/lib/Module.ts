@@ -1,5 +1,7 @@
 import { DependencyKey, ProvidedActual } from './DependencyKey'
-import { ProvideGraph, Container, FlatGraph, unresolved, CanRequest, Merge, DefaultGraph } from './Container'
+import { Container } from './Container'
+import { ProvideGraph, FlatGraph, Merge, DefaultGraph } from './ProvideGraph'
+import { unresolved, CanRequest } from './CanRequest'
 
 /** Implementation of a module that performs operations on a given `Container`. */
 
@@ -107,7 +109,7 @@ class ListModule<P extends ProvideGraph> extends BaseModule<P> {
     }
 }
 
-export type Module<P extends ProvideGraph = any> = BaseModule<P>
+export interface Module<P extends ProvideGraph = any> extends BaseModule<P> { }
 
 export function Module<M extends ModuleItem[]>(...m: M): Module<ModuleProvides<M>> {
     return new ListModule(m)

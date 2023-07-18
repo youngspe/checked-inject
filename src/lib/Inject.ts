@@ -1,7 +1,8 @@
-import { Container, InjectError, DependencyNotSyncError, ProvideGraph, ChildGraph, FlatGraph } from './Container'
+import { Container, InjectError, DependencyNotSyncError } from './Container'
 import { ProvidedActual, Actual, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
 import { ComputedKey } from './ComputedKey'
 import { Initializer, maybePromiseThen } from './_internal'
+import { ProvideGraph, ChildGraph, FlatGraph } from './ProvideGraph'
 
 export namespace Inject {
     export abstract class Value<T> extends ComputedKey<T, void, never> {

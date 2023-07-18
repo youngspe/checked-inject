@@ -1,22 +1,23 @@
 import { HasComputedKeySymbol } from './ComputedKey'
-import { Container, Merge, ProvideGraph } from './Container'
+import { Container } from './Container'
 import { Scope } from './Scope'
 import { PrivateConstruct } from './_internal'
 import { BaseTypeKey, HasTypeKeySymbol } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync } from './Dependency'
+import { Merge, ProvideGraph } from './ProvideGraph'
 
 interface OnlyObject<out T = unknown> {
     readonly [k: keyof any]: T
 }
 interface OnlyObjectKey extends OnlyObject<DependencyKey> { }
 
-/** An object representing a structured set of type keys to produce type `T`. */
+/** @internal An object representing a structured set of type keys to produce type `T`. */
 export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> = T extends OnlyObject ? OnlyObjectKey & {
     readonly [K in keyof T]: DependencyKey.Of<T[K], D, Sync>
 } : never
 
-/** An array representing a structured set of type keys to produce type `T`. */
+/** @internal An array representing a structured set of type keys to produce type `T`. */
 export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
     T extends [] ? [] :
@@ -25,10 +26,11 @@ export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     } :
     never
 
-/** A structured set of type keys to produce type `T`. */
+/** @internal A structured set of type keys to produce type `T`. */
 export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | ObjectKey<T, D, Sync>
     | ArrayKey<T, D, Sync>
+/** @internal */
 export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | BaseTypeKey<T>
     | HasComputedKeySymbol<T, D, Sync>
@@ -85,15 +87,18 @@ type ContainerTransform<T, P extends ProvideGraph> =
 
 export type ProvidedActual<K extends DependencyKey, P extends ProvideGraph> = ContainerTransform<Actual<K>, P>
 
+/** @internal */
 export abstract class UnableToResolve<in out K> {
     private _k!: K
     constructor(_: never) { }
 }
 
+/** @internal */
 export abstract class UnableToResolveIsSync<in out K> {
     private _s!: K
 }
 
+/** @internal */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
@@ -103,6 +108,7 @@ export type DepsOf<K extends DependencyKey> =
     K extends OnlyObject<infer X extends DependencyKey> ? DepsOf<X> :
     UnableToResolve<K>
 
+/** @internal */
 export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope ? UnableToResolveIsSync<K> :
     K extends BaseTypeKey | InjectableClass ? IsSync<K> :
