@@ -3,25 +3,15 @@ import { Container } from './Container'
 import { ProvideGraph, FlatGraph, Merge, DefaultGraph } from './ProvideGraph'
 import { unresolved, CanRequest } from './CanRequest'
 
-/** Implementation of a module that performs operations on a given `Container`. */
-
-export interface FunctionModuleItem<P extends ProvideGraph = any> {
-    (ct: Container<FlatGraph<never>>): Container<P>
-}
-export type ModuleItem = FunctionModuleItem | ApplyTo | readonly ModuleItem[]
-interface ApplyTo<P extends ProvideGraph = any> {
-    applyTo(ct: Container<any>): Container<P>
-}
-
 function requestForModule<P extends ProvideGraph, K extends DependencyKey>(
-    mod: ApplyTo<P>,
+    mod: Module.ApplyTo<P>,
     deps: K,
 ): ModuleActual<K, P> {
     return Container.create().apply(mod).requestUnchecked(deps)
 }
 
 function requestAsyncForModule<P extends ProvideGraph, K extends DependencyKey>(
-    mod: ApplyTo<P>,
+    mod: Module.ApplyTo<P>,
     deps: K,
 ): Promise<ModuleActual<K, P>> {
     return Container.create().apply(mod).requestAsyncUnchecked(deps)
@@ -30,7 +20,7 @@ function requestAsyncForModule<P extends ProvideGraph, K extends DependencyKey>(
 type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = ProvidedActual<K, Merge<DefaultGraph, P>>
 
 /** An object used to provide definitions to a `Container` */
-export abstract class BaseModule<P extends ProvideGraph = any> implements ApplyTo<P> {
+export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {
     readonly [unresolved]?: ['missing dependencies:']
 
     abstract applyTo(ct: Container<any>): Container<P>
@@ -83,14 +73,14 @@ export abstract class BaseModule<P extends ProvideGraph = any> implements ApplyT
         return requestAsyncForModule(this, fac).then(f => f(...args))
     }
 
-    container(this: ApplyTo<P>) {
+    container(this: Module.ApplyTo<P>) {
         return Container.create().apply(this)
     }
 }
 class ListModule<P extends ProvideGraph> extends BaseModule<P> {
-    private readonly _items: ModuleItem[]
+    private readonly _items: Module.Item[]
 
-    constructor(items: ModuleItem[]) {
+    constructor(items: Module.Item[]) {
         super()
         this._items = items
     }
@@ -111,8 +101,26 @@ class ListModule<P extends ProvideGraph> extends BaseModule<P> {
 
 export interface Module<P extends ProvideGraph = any> extends BaseModule<P> { }
 
-export function Module<M extends ModuleItem[]>(...m: M): Module<ModuleProvides<M>> {
+export function Module<M extends Module.Item[]>(...m: M): Module<Module.Provides<M>> {
     return new ListModule(m)
 }
 
-export type ModuleProvides<M> = M extends ApplyTo<infer P> | FunctionModuleItem<infer P> ? P : M extends readonly [infer A] ? ModuleProvides<A> : M extends readonly [infer A, ...infer B] ? Merge<ModuleProvides<A>, ModuleProvides<B>> : M extends [] ? FlatGraph<never> : never
+export namespace Module {
+    /** Implementation of a module that performs operations on a given `Container`. */
+    export interface FunctionItem<P extends ProvideGraph = any> {
+        (ct: Container<FlatGraph<never>>): Container<P>
+    }
+    export type Item = FunctionItem | ApplyTo | readonly Item[]
+
+    export type Provides<M> =
+        M extends ApplyTo<infer P> | FunctionItem<infer P> ? P :
+        M extends readonly [infer A] ? Provides<A> :
+        M extends readonly [infer A, ...infer B] ? Merge<Provides<A>, Provides<B>> :
+        M extends [] ? FlatGraph<never> :
+        never
+
+    export interface ApplyTo<P extends ProvideGraph = any> {
+        applyTo(ct: Container<any>): Container<P>
+    }
+
+}

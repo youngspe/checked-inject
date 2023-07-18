@@ -6,7 +6,7 @@ import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
 import { Actual, ProvidedActual, DepsOf, IsSyncDepsOf, UnableToResolve, DependencyKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
-import { ModuleItem, ModuleProvides } from './Module'
+import { Module } from './Module'
 import { ChildGraph, DefaultGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, unresolved } from './CanRequest'
 
@@ -503,7 +503,7 @@ export class Container<P extends ProvideGraph> {
     }
 
     /** Apply a list of `Module`s to this container. */
-    apply<M extends ModuleItem[]>(...modules: M): Container<Merge<P, ModuleProvides<M>>> {
+    apply<M extends Module.Item[]>(...modules: M): Container<Merge<P, Module.Provides<M>>> {
         for (let mod of modules) {
             if (mod instanceof Array) {
                 mod.forEach(m => this.apply(m as any))
