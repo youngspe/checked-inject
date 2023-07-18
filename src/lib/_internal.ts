@@ -72,30 +72,6 @@ export function asMixinClass<
     })
 }
 
-export type AwaitTransform<T> =
-    T extends readonly [] ? [] :
-    T extends readonly [infer A, ...infer B] ? [AwaitTransform<A>, ...AwaitTransform<B>] :
-    T extends readonly (infer U)[] ? AwaitTransform<U>[] :
-    T extends PromiseLike<infer U> ? AwaitTransform<Awaited<U>> :
-    T extends object ? { [X in keyof T]: AwaitTransform<T> } :
-    Awaited<T>
-
-export async function awaitTransform<T>(input: T): Promise<AwaitTransform<T>> {
-    const target = await input
-    if (target == null) return target as AwaitTransform<T>
-    if (target instanceof Array) return await Promise.all(target) as AwaitTransform<T>
-
-    if (typeof target == 'object') {
-        const output: any = {}
-        for (let key of Reflect.ownKeys(target)) {
-            output[key] = await target[key as keyof Awaited<T>]
-        }
-    }
-
-    return target as AwaitTransform<T>
-}
-
-
 export type Initializer<T, Arg = void> = Initializer.Sync<T, Arg> | Initializer.Async<T, Arg>
 
 export namespace Initializer {

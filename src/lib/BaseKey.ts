@@ -1,27 +1,35 @@
-import { InjectError, ProvideGraph } from './Container';
-import { AnyKey, DepsOf, AbstractKey, HasBaseKeySymbol, _baseKeySymbol, Actual, ContainerActual, Dependency, RequireSync, IsSyncDepsOf } from "./TypeKey";
-import { Initializer } from './_internal';
+import { InjectError, ProvideGraph } from './Container'
+import { Dependency } from './Dependency'
+import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
+import { AbstractKey, HasAbstractKeySymbol } from './AbstractKey'
+import { Initializer } from './_internal'
+
+
+const _baseKeySymbol = Symbol()
+
+export interface HasBaseKeySymbol<out T, D = any, Sync = any> extends HasAbstractKeySymbol<T> {
+    readonly [_baseKeySymbol]: readonly [T, D, Sync] | null
+}
 
 /** A key that, upon request,transforms a provider for `K` into a provider of `T`. */
-
 export abstract class BaseKey<
     out T = any,
-    out K extends AnyKey = any,
+    out K extends DependencyKey = any,
     D extends Dependency = DepsOf<K>,
     P extends ProvideGraph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
 > extends AbstractKey<T> implements HasBaseKeySymbol<T, D, Sync> {
     readonly [_baseKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
-    readonly inner: K;
+    readonly inner: K
 
     constructor(inner: K) {
-        super();
-        this.inner = inner;
+        super()
+        this.inner = inner
     }
 
     /** Given a provide of `D` or an error, return a provider of `T` or an error. */
-    abstract init(deps: Initializer<ContainerActual<K, P>> | InjectError): Initializer<T> | InjectError;
+    abstract init(deps: Initializer<ProvidedActual<K, P>> | InjectError): Initializer<T> | InjectError
 }
 
 export namespace BaseKey {

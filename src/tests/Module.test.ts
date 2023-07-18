@@ -1,5 +1,5 @@
-import { Inject, Module, TypeKey } from "../lib"
-import { sleep } from "./utils"
+import { Inject, Module, TypeKey } from '../lib'
+import { sleep } from './utils'
 
 namespace Keys {
     export class UserName extends TypeKey<string>() { static readonly keyTag = Symbol() }

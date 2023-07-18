@@ -1,4 +1,4 @@
-import { Container, Inject, Module, ProvideGraph, Scope, Singleton, TypeKey } from '../lib'
+import { Container, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
 
 class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
@@ -166,7 +166,7 @@ describe(Container, () => {
         const parent = Container.create()
             .provide(NumberKey, {}, () => 10)
             .provide(StringKey, {}, () => 'foo')
-            .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str]);
+            .provide(ArrayKey, MyScope, { num: NumberKey, str: StringKey }, ({ num, str }) => [num.toString(), str])
 
         const child1 = parent.createChild()
             .addScope(MyScope)
