@@ -1,7 +1,7 @@
 export { Container } from './Container'
 export { TypeKey } from './TypeKey'
 export { Inject } from './Inject'
-export { BaseKey } from './BaseKey'
+export { ComputedKey } from './ComputedKey'
 export { Scope, ScopeList, Singleton } from './Scope'
 export { Module } from './Module'
 export { Dependency } from './Dependency'

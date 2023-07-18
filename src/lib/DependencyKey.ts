@@ -1,4 +1,4 @@
-import { HasBaseKeySymbol } from './BaseKey'
+import { HasComputedKeySymbol } from './ComputedKey'
 import { Container, Merge, ProvideGraph } from './Container'
 import { Scope } from './Scope'
 import { PrivateConstruct } from './_internal'
@@ -31,12 +31,12 @@ export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency
     | ArrayKey<T, D, Sync>
 export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | BaseTypeKey<T>
-    | HasBaseKeySymbol<T, D, Sync>
+    | HasComputedKeySymbol<T, D, Sync>
 
 /** The actual type that a dependency key of type `D` resolves to. */
 export type Actual<K extends DependencyKey> =
     K extends DependencyKey.Of<infer _T> ? (
-        K extends HasBaseKeySymbol<infer T> | HasTypeKeySymbol<infer T> ? T :
+        K extends HasComputedKeySymbol<infer T> | HasTypeKeySymbol<infer T> ? T :
         K extends InjectableClass<infer T> ? T :
         K extends StructuredKey<infer T> ? T :
         _T
@@ -77,7 +77,7 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
 export type DependencyKey =
     | OnlyObject<DependencyKey>
     | DependencyKey[]
-    | HasBaseKeySymbol<any>
+    | HasComputedKeySymbol<any>
     | HasTypeKeySymbol<any>
     | PrivateConstruct
     | null | undefined | void

@@ -2,7 +2,7 @@ import { ProvideGraph } from './Container'
 import { Inject } from './Inject'
 import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
 
-/** Implementation detail--extend `BaseKey` instead. */
+/** Implementation detail--extend `ComputedKey` instead. */
 export abstract class AbstractKey  {
     /** Requests a function returning a lazily-computed value for this key. */
     Lazy = function <Th extends DependencyKey>(this: Th): Inject.GetLazy<Th> {

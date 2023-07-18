@@ -1,4 +1,4 @@
-import { HasBaseKeySymbol } from './BaseKey'
+import { HasComputedKeySymbol } from './ComputedKey'
 import { ScopeList } from './Scope'
 import { Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
@@ -30,19 +30,19 @@ import { AbstractKey } from './AbstractKey'
  */
 export interface InjectableClass<T = any> extends Class<T> {
     readonly scope?: ScopeList
-    readonly inject?: HasBaseKeySymbol<T> | (() => HasBaseKeySymbol<T>)
+    readonly inject?: HasComputedKeySymbol<T> | (() => HasComputedKeySymbol<T>)
 }
 
 export interface ClassWithoutDefault extends InjectableClass<any> {
     readonly inject?: never
 }
 export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
-    readonly inject: HasBaseKeySymbol<T, D, Sync> | (() => HasBaseKeySymbol<T, D, Sync>)
+    readonly inject: HasComputedKeySymbol<T, D, Sync> | (() => HasComputedKeySymbol<T, D, Sync>)
 }
 
 export function InjectableClass<T = any>() {
     return asMixin(class Injectable {
         readonly scope?: ScopeList
-        readonly inject?: HasBaseKeySymbol<T> | (() => HasBaseKeySymbol<T>)
+        readonly inject?: HasComputedKeySymbol<T> | (() => HasComputedKeySymbol<T>)
     }, AbstractKey)
 }

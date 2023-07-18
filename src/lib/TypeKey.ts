@@ -1,5 +1,5 @@
 import { Inject } from './Inject'
-import { BaseKey, HasBaseKeySymbol } from './BaseKey'
+import { ComputedKey, HasComputedKeySymbol } from './ComputedKey'
 import { AbstractKey } from './AbstractKey'
 import { ScopeList } from './Scope'
 import { DependencyKey, Actual } from './DependencyKey'
@@ -16,7 +16,7 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
 
-export interface BaseTypeKey<out T = any, Def extends HasBaseKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
+export interface BaseTypeKey<out T = any, Def extends HasComputedKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: ScopeList
     readonly name: string
@@ -26,7 +26,7 @@ export interface BaseTypeKey<out T = any, Def extends HasBaseKeySymbol<T> = any>
     readonly defaultInit?: Def
 }
 
-export interface TypeKey<out T = any, Def extends BaseKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
+export interface TypeKey<out T = any, Def extends ComputedKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
     readonly keyTag: symbol
 }
 
@@ -35,7 +35,7 @@ export interface BaseTypeKeyWithDefault<
     out T,
     D extends Dependency,
     Sync extends Dependency,
-> extends BaseTypeKey<T, HasBaseKeySymbol<T, D, Sync>> { }
+> extends BaseTypeKey<T, HasComputedKeySymbol<T, D, Sync>> { }
 
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
 export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
@@ -44,7 +44,7 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
-interface TypeKeyClass<out T, Def extends HasBaseKeySymbol<T>> extends
+interface TypeKeyClass<out T, Def extends HasComputedKeySymbol<T>> extends
     AbstractKey,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }
@@ -53,12 +53,12 @@ export function TypeKey<T>(): TypeKeyClass<T, never>
 export function TypeKey<T>(options: TypeKey.Options<T, never>): TypeKeyClass<T, never>
 
 export function TypeKey<
-    Def extends HasBaseKeySymbol<T>,
-    T = Def extends HasBaseKeySymbol<infer _T> ? _T : never,
+    Def extends HasComputedKeySymbol<T>,
+    T = Def extends HasComputedKeySymbol<infer _T> ? _T : never,
 >(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
 
 export function TypeKey<
-    Def extends HasBaseKeySymbol<T>,
+    Def extends HasComputedKeySymbol<T>,
     T,
 >({ default: defaultInit, of, name = of?.name }: TypeKey.Options<T, Def> = {} as any): TypeKeyClass<T, Def> {
     return asMixin(class _TypeKey {
@@ -73,7 +73,7 @@ export function TypeKey<
 }
 
 export namespace TypeKey {
-    export interface Options<T, Def extends HasBaseKeySymbol<T>> {
+    export interface Options<T, Def extends HasComputedKeySymbol<T>> {
         of?: ClassLike<T>
         name?: string
         default?: Def
@@ -101,7 +101,7 @@ export function FactoryKey<
     T,
     Args extends any[],
     K extends DependencyKey,
->(deps: K, fac: (deps: Actual<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, BaseKey<(...args: Args) => T, K>>
+>(deps: K, fac: (deps: Actual<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>>
 
 export function FactoryKey<
     T,
@@ -111,10 +111,10 @@ export function FactoryKey<
     ...args:
         | []
         | [deps: K, fac: (deps: Actual<K>, ...args: Args) => T]
-): TypeKeyClass<(...args: Args) => T, BaseKey<(...args: Args) => T, K>> {
+): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>> {
     if (args.length == 2) {
         let [deps, fac] = args
-        return TypeKey<BaseKey<(...args: Args) => T, K>>({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
+        return TypeKey<ComputedKey<(...args: Args) => T, K>>({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
     }
     return TypeKey()
 }

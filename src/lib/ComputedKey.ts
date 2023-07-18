@@ -5,21 +5,21 @@ import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
 
 
-const _baseKeySymbol = Symbol()
+const _computedKeySymbol = Symbol()
 
-export interface HasBaseKeySymbol<out T, D = any, Sync = any> {
-    readonly [_baseKeySymbol]: readonly [T, D, Sync] | null
+export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
+    readonly [_computedKeySymbol]: readonly [T, D, Sync] | null
 }
 
 /** A key that, upon request,transforms a provider for `K` into a provider of `T`. */
-export abstract class BaseKey<
+export abstract class ComputedKey<
     out T = any,
     out K extends DependencyKey = any,
     D extends Dependency = DepsOf<K>,
     P extends ProvideGraph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> extends AbstractKey implements HasBaseKeySymbol<T, D, Sync> {
-    readonly [_baseKeySymbol]: readonly [T, D, Sync] | null = null
+> extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
+    readonly [_computedKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
     readonly inner: K
 
@@ -32,6 +32,6 @@ export abstract class BaseKey<
     abstract init(deps: Initializer<ProvidedActual<K, P>> | InjectError): Initializer<T> | InjectError
 }
 
-export namespace BaseKey {
-    export interface Any<out T = any> extends BaseKey<T, any, any, any> { }
+export namespace ComputedKey {
+    export interface Any<out T = any> extends ComputedKey<T, any, any, any> { }
 }

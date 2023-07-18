@@ -1,10 +1,10 @@
 import { Container, InjectError, DependencyNotSyncError, ProvideGraph, ChildGraph, FlatGraph } from './Container'
 import { ProvidedActual, Actual, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
-import { BaseKey } from './BaseKey'
+import { ComputedKey } from './ComputedKey'
 import { Initializer, maybePromiseThen } from './_internal'
 
 export namespace Inject {
-    export abstract class Value<T> extends BaseKey<T, void, never> {
+    export abstract class Value<T> extends ComputedKey<T, void, never> {
         readonly instance: T
         private readonly _init: Initializer.Sync<T>
 
@@ -25,7 +25,7 @@ export namespace Inject {
         return new _Value(value)
     }
 
-    export abstract class Map<T, K extends DependencyKey, P extends ProvideGraph = never> extends BaseKey<T, K, DepsOf<K>, P> {
+    export abstract class Map<T, K extends DependencyKey, P extends ProvideGraph = never> extends ComputedKey<T, K, DepsOf<K>, P> {
         private readonly _transform: (deps: ProvidedActual<K, P>) => T
 
         constructor(src: K, transform: (deps: ProvidedActual<K, P>) => T) {
@@ -56,7 +56,7 @@ export namespace Inject {
         return new _Map(src, transform)
     }
 
-    class From<K extends DependencyKey> extends BaseKey<Actual<K>, K> {
+    class From<K extends DependencyKey> extends ComputedKey<Actual<K>, K> {
         init(deps: InjectError | Initializer<Actual<K>>): InjectError | Initializer<Actual<K>> {
             return deps
         }
@@ -78,7 +78,7 @@ export namespace Inject {
         return map<T, K, P>(deps, deps => init(...deps))
     }
 
-    export abstract class GetLazy<K extends DependencyKey> extends BaseKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+    export abstract class GetLazy<K extends DependencyKey> extends ComputedKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
         override init(deps: Initializer<Actual<K>> | InjectError): Initializer<() => Actual<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()
@@ -104,7 +104,7 @@ export namespace Inject {
         return new _GetLazy(src)
     }
 
-    export abstract class GetProvider<K extends DependencyKey> extends BaseKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+    export abstract class GetProvider<K extends DependencyKey> extends ComputedKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
         override init(deps: Initializer<Actual<K>> | InjectError): Initializer<() => Actual<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()
@@ -120,7 +120,7 @@ export namespace Inject {
         return new _GetProvider(src)
     }
 
-    export abstract class Optional<K extends DependencyKey> extends BaseKey<Actual<K> | undefined, K, never, never, IsSyncDepsOf<K>> {
+    export abstract class Optional<K extends DependencyKey> extends ComputedKey<Actual<K> | undefined, K, never, never, IsSyncDepsOf<K>> {
         override init(deps: Initializer<Actual<K>> | InjectError): Initializer<Actual<K> | undefined> {
             if (deps instanceof InjectError) return { sync: true, init: () => undefined }
             return deps
@@ -157,7 +157,7 @@ export namespace Inject {
         return new _Build(src, ...args)
     }
 
-    export abstract class Async<K extends DependencyKey> extends BaseKey<Promise<Actual<K>>, K, DepsOf<K>, never, never> {
+    export abstract class Async<K extends DependencyKey> extends ComputedKey<Promise<Actual<K>>, K, DepsOf<K>, never, never> {
         override init(deps: InjectError | Initializer<Actual<K>>): InjectError | Initializer.Sync<Promise<Actual<K>>> {
             if (deps instanceof InjectError) return deps
             return { sync: true, init: () => Promise.resolve(deps.init()) }

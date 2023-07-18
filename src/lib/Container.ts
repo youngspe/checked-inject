@@ -1,5 +1,5 @@
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault, TypeKey } from './TypeKey'
-import { BaseKey } from './BaseKey'
+import { ComputedKey } from './ComputedKey'
 import { Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
@@ -67,7 +67,7 @@ export class ScopeUnavailableError extends InjectError {
 // This entry has a dependency key and an initializer function
 interface EntryInit<T, P extends ProvideGraph, K extends DependencyKey> {
     scope?: Scope[]
-    binding: BaseKey<T, K, any, P, any>
+    binding: ComputedKey<T, K, any, P, any>
     sync: boolean
 }
 
@@ -412,7 +412,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         if (deps == null) return { sync: true, init: () => deps as T }
         if (Object.is(deps, Container.Key)) return { sync: true, init: () => this as T }
         if (TypeKey.isTypeKey(deps)) return this._getTypeKeyProvider(deps as TypeKey<T>) as Initializer<T>
-        if (deps instanceof BaseKey) return deps.init(this._getProvider(deps.inner))
+        if (deps instanceof ComputedKey) return deps.init(this._getProvider(deps.inner))
         if (typeof deps == 'function') return this._getClassProvider(deps as InjectableClass<T>)
         const arrayLength = deps instanceof Array ? deps.length : null
 
@@ -484,7 +484,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ...args: [
             ...scope: [scope: ScopeList<S>] | [],
             ...init:
-            | [BaseKey<Actual<K>, any, D, P, Sync>]
+            | [ComputedKey<Actual<K>, any, D, P, Sync>]
             | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>],
         ]
     ): this {
@@ -518,7 +518,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
                 }
             }
         } else {
-            const binding = args[args.length - 1] as BaseKey<T, SrcK, any>
+            const binding = args[args.length - 1] as ComputedKey<T, SrcK, any>
             if (binding instanceof Inject.Value) {
                 entry = {
                     value: { instance: binding.instance }
@@ -550,7 +550,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ...args: [
             ...scope: [scope: ScopeList<S>] | [],
             ...init:
-            | [BaseKey<Actual<K>, any, D, P, Sync>]
+            | [ComputedKey<Actual<K>, any, D, P, Sync>]
             | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
         ]
     ): Container<Provide<
@@ -571,7 +571,7 @@ export class Container<P extends ProvideGraph> implements _Container<P> {
         ...args: [
             ...scope: [scope: ScopeList<S>] | [],
             ...init:
-            | [BaseKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
+            | [ComputedKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
             | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>]
         ]
     ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
