@@ -3,18 +3,18 @@ import { Inject } from './Inject'
 import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
 
 /** Implementation detail--extend `BaseKey` instead. */
-export abstract class AbstractKey<out T>  {
-    /** Requests a function returning a lazily-computed value of `T`. */
+export abstract class AbstractKey  {
+    /** Requests a function returning a lazily-computed value for this key. */
     Lazy = function <Th extends DependencyKey>(this: Th): Inject.GetLazy<Th> {
         return Inject.lazy<Th>(this)
     }
 
-    /** Requests a function returning a value of `T`. */
+    /** Requests a function returning this key's output type. */
     Provider = function <Th extends DependencyKey>(this: Th): Inject.GetProvider<Th> {
         return Inject.provider(this)
     }
 
-    /** Requests a value of type `T` if provided, otherwise `undefined`. */
+    /** Requests a value for this key if provided, otherwise `undefined`. */
     Optional = function <Th extends DependencyKey>(this: Th): Inject.Optional<Th> {
         return Inject.optional(this)
     }

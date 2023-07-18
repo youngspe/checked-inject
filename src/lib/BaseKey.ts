@@ -18,7 +18,7 @@ export abstract class BaseKey<
     D extends Dependency = DepsOf<K>,
     P extends ProvideGraph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> extends AbstractKey<T> implements HasBaseKeySymbol<T, D, Sync> {
+> extends AbstractKey implements HasBaseKeySymbol<T, D, Sync> {
     readonly [_baseKeySymbol]: readonly [T, D, Sync] | null = null
     /** This key determines the dependencies that will be passed to `this.init()`. */
     readonly inner: K

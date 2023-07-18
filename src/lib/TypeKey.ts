@@ -26,7 +26,7 @@ export interface BaseTypeKey<out T = any, Def extends HasBaseKeySymbol<T> = any>
     readonly defaultInit?: Def
 }
 
-export interface TypeKey<out T = any, Def extends BaseKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey<T> {
+export interface TypeKey<out T = any, Def extends BaseKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
     readonly keyTag: symbol
 }
 
@@ -45,7 +45,7 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
 interface TypeKeyClass<out T, Def extends HasBaseKeySymbol<T>> extends
-    AbstractKey<T>,
+    AbstractKey,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }
 
@@ -69,7 +69,7 @@ export function TypeKey<
         static readonly defaultInit = defaultInit
         static readonly inject = null
         static toString() { return this.fullName }
-    }, AbstractKey<T>)
+    }, AbstractKey)
 }
 
 export namespace TypeKey {
