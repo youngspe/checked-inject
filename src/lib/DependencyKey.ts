@@ -47,17 +47,41 @@ export type Actual<K extends DependencyKey> =
     K extends void ? void :
     never
 
-type ArrayActual<K extends readonly DependencyKey[]> = K extends [] ? [] : K extends readonly [infer A extends DependencyKey, ...infer B extends DependencyKey[]] ? [Actual<A>, ...ArrayActual<B>] : K extends readonly (infer A extends DependencyKey)[] ? Actual<A>[] : never
+type ArrayActual<K extends readonly DependencyKey[]> =
+    K extends [] ? [] :
+    K extends readonly [
+        infer A extends DependencyKey,
+        ...infer B extends DependencyKey[]
+    ] ? [Actual<A>, ...ArrayActual<B>] :
+    K extends readonly (infer A extends DependencyKey)[] ? Actual<A>[] :
+    never
 
 type ObjectActual<K extends OnlyObject<DependencyKey>> = {
     [X in keyof K]: Actual<K[X]>
 }
 
-type Leaves<T> = T extends (OnlyObject<infer U> | (infer U)[]) ? Leaves<U> : T extends Promise<infer U> ? Leaves<U> : T extends (...args: any[]) => infer U ? Leaves<U> : T
+type Leaves<T> =
+    T extends Promise<infer U> ? Leaves<U> :
+    T extends (OnlyObject<infer U> | (infer U)[]) ? Leaves<U> :
+    T extends (...args: any[]) => infer U ? Leaves<U> :
+    T
 
-type ContainerTransform<T, P extends ProvideGraph> = [P] extends [never] ? T : Container<any> extends Leaves<T> ? (T extends [] ? [] : T extends readonly [infer A, ...infer B] ? [ContainerTransform<A, P>, ...ContainerTransform<B, P>] : T extends readonly (infer U)[] ? ContainerTransform<U, P>[] : T extends Container<infer P1> ? Container<Merge<P, P1>> : T extends Promise<infer U> ? Promise<ContainerTransform<U, P>> : T extends (...args: infer Args) => infer U ? (...args: Args) => ContainerTransform<U, P> : T extends OnlyObject ? {
-    [K in keyof T]: ContainerTransform<T[K], P>
-} : T) : T
+type ContainerTransform<T, P extends ProvideGraph> =
+    [P] extends [never] ? T : Container<any> extends Leaves<T> ? (
+        T extends [] ? [] :
+        T extends readonly [infer A, ...infer B] ? [
+            ContainerTransform<A, P>,
+            ...ContainerTransform<B, P>
+        ] :
+        T extends readonly (infer U)[] ? ContainerTransform<U, P>[] :
+        T extends Container<infer P1> ? Container<Merge<P, P1>> :
+        T extends Promise<infer U> ? Promise<ContainerTransform<U, P>> :
+        T extends (...args: infer Args) => infer U ? (...args: Args) => ContainerTransform<U, P> :
+        T extends OnlyObject ? {
+            [K in keyof T]: ContainerTransform<T[K], P>
+        } :
+        T
+    ) : T
 
 export type ProvidedActual<K extends DependencyKey, P extends ProvideGraph> = ContainerTransform<Actual<K>, P>
 
@@ -70,9 +94,23 @@ export abstract class UnableToResolveIsSync<in out K> {
     private _s!: K
 }
 
-export type DepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> : K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K : K extends DependencyKey.Of<infer _T, never> ? never : K extends DependencyKey.Of<infer _T, infer D> ? D : K extends readonly (infer X extends DependencyKey)[] ? DepsOf<X> : K extends OnlyObject<infer X extends DependencyKey> ? DepsOf<X> : UnableToResolve<K>
+export type DepsOf<K extends DependencyKey> =
+    [DependencyKey] extends [K] ? UnableToResolve<K> :
+    K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
+    K extends DependencyKey.Of<infer _T, never> ? never :
+    K extends DependencyKey.Of<infer _T, infer D> ? D :
+    K extends readonly (infer X extends DependencyKey)[] ? DepsOf<X> :
+    K extends OnlyObject<infer X extends DependencyKey> ? DepsOf<X> :
+    UnableToResolve<K>
 
-export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> : K extends Scope ? UnableToResolveIsSync<K> : K extends BaseTypeKey | InjectableClass ? IsSync<K> : K extends DependencyKey.Of<infer _T, any, never> ? never : K extends DependencyKey.Of<infer _T, any, infer D> ? D : K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> : K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> : UnableToResolveIsSync<K>
+export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> :
+    K extends Scope ? UnableToResolveIsSync<K> :
+    K extends BaseTypeKey | InjectableClass ? IsSync<K> :
+    K extends DependencyKey.Of<infer _T, any, never> ? never :
+    K extends DependencyKey.Of<infer _T, any, infer D> ? D :
+    K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> :
+    K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> :
+    UnableToResolveIsSync<K>
 
 export type DependencyKey =
     | OnlyObject<DependencyKey>

@@ -36,6 +36,7 @@ export interface InjectableClass<T = any> extends Class<T> {
 export interface ClassWithoutDefault extends InjectableClass<any> {
     readonly inject?: never
 }
+
 export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
     readonly inject: HasComputedKeySymbol<T, D, Sync> | (() => HasComputedKeySymbol<T, D, Sync>)
 }
