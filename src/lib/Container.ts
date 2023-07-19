@@ -7,65 +7,9 @@ import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
 import { Actual, ProvidedActual, DepsOf, DependencyKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
-import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
+import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, unresolved } from './CanRequest'
-import type { AbstractKey } from './AbstractKey'
-
-/** Represents a possible error when resolving a dependency. */
-export abstract class InjectError extends Error { }
-
-/** Error thrown when requeting a TypeKey whose value was not provided. */
-export class TypeKeyNotProvidedError extends InjectError {
-    readonly key: TypeKey
-    constructor(key: TypeKey) {
-        super(key.name ? `TypeKey ${key.name} not provided.` : 'TypeKey not provided.')
-        this.key = key
-    }
-}
-
-/** Error thrown when requeting a TypeKey whose value was not provided. */
-export class DependencyNotSyncError extends InjectError {
-    readonly key?: DependencyKey
-    constructor(key?: DependencyKey) {
-        super('Dependency not provided synchronously.')
-        this.key = key
-    }
-}
-
-/** Error thrown when a dependency's dependency has failed to resolve. */
-export class DependencyFailedError extends InjectError {
-    readonly cause: InjectError
-
-    constructor(cause: InjectError) {
-        super(`Dependency failed: ${cause.message}`)
-        this.cause = cause
-    }
-}
-
-/** Error thrown when a member of a structured dependency key failed to resolve. */
-export class InjectPropertyError extends InjectError {
-    readonly childErrors: { [K in keyof any]?: InjectError }
-    constructor(childErrors: { [K in keyof any]?: InjectError }) {
-        super([
-            '{',
-            ...Object
-                .getOwnPropertyNames(childErrors)
-                .flatMap(e => `${e}: ${childErrors[e]?.message?.split('\n')},`)
-                .map(l => `  ${l}`),
-            '}',
-        ].join('\n'))
-        this.childErrors = childErrors
-    }
-}
-
-export class ScopeUnavailableError extends InjectError {
-    readonly scope: ScopeList
-    constructor(scope: ScopeList) {
-        const message = `Scope ${ScopeList.flatten(scope).map(s => s.name ?? '<unnamed>').join('|')} unavailable`
-        super(message)
-        this.scope = scope
-    }
-}
+import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, DependencyFailedError, InjectPropertyError, DependencyNotSyncError } from './InjectError'
 
 // This entry has a dependency key and an initializer function
 interface EntryInit<T, P extends ProvideGraph, K extends DependencyKey> {
@@ -132,6 +76,14 @@ export class Container<P extends Container.Graph> {
         this.scopes = scope instanceof Array ? scope : [scope]
     }
 
+    /**
+     * Creates a new {@link Container} instance.
+     *
+     * @param options - Options for creating the container
+     * @param options.scope - A {@link Scope} or {@link ScopeList} to assign to the container
+     *
+     * @group Static Methods
+     */
     static create<S extends Scope = never>(options: { scope?: ScopeList<S> } = {}): Container<Container.DefaultGraph<S>> {
         let { scope = [] } = options
         let scopeWithSingleton = [Singleton, ...ScopeList.flatten(scope)]
@@ -453,6 +405,8 @@ export class Container<P extends Container.Graph> {
      *    * init: A function that accepts the dependencies specified by `deps` and returns the provided value
      *
      * @returns This container, now typed to include the provided type and its dependencies
+     *
+     * @group Provide Methods
      */
     provide<
         K extends TypeKey<any> | InjectableClass<any>,
@@ -507,6 +461,8 @@ export class Container<P extends Container.Graph> {
      *    * init: An async function that accepts the dependencies specified by `deps` and returns the provided value
      *
      * @returns This container, now typed to include the provided type and its dependencies
+     *
+     * @group Provide Methods
      */
     provideAsync<
         K extends TypeKey<any> | InjectableClass<any>,
@@ -526,7 +482,16 @@ export class Container<P extends Container.Graph> {
         return this._provide(false, key as any, ...args) as any
     }
 
-    /** Registers 'key' to provide the given `instance`. */
+    /**
+     * Provides an instance of the target type for the given key or class.
+     *
+     * @template K - The type of the key or class object
+     * @param key - The key or class of the type to be provided
+     * @param instance - The provided instance
+     * @returns This container, now typed to include the provieded type and its dependencies
+     *
+     * @group Provide Methods
+     */
     provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<
         Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
     > {
@@ -536,6 +501,15 @@ export class Container<P extends Container.Graph> {
         return this as any
     }
 
+    /**
+     * Adds the given {@link Scope | Scopes} to this container.
+     * Any dependencies with this scope will be instantiated when first requested and memoized within this container.
+     *
+     * @param scope - The scope or scopes to add to this container
+     * @returns This container, now typed to include the added scopes
+     *
+     * @group Provide Methods
+     */
     addScope<S extends Scope>(...scope: S[]): Container<
         Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
     > {
@@ -543,17 +517,41 @@ export class Container<P extends Container.Graph> {
         return this as any
     }
 
-    requestUnchecked<K extends DependencyKey>(deps: K): ProvidedActual<K, P> {
-        const provider = this._getProvider(deps)
+    /**
+     * Requests the dependency specified by the given key,
+     * without statically checking that the dependency is safe to request.
+     *
+     * @param key - A key specifying the dependency to request
+     * @returns The requested dependency
+     *
+     * @throws {@link Errors.InjectError}
+     * when not all transitive dependencies are met
+     *
+     * @group Request Methods
+     */
+    requestUnchecked<K extends DependencyKey>(key: K): ProvidedActual<K, P> {
+        const provider = this._getProvider(key)
         if (provider instanceof InjectError) {
             throw provider
         }
         if (!provider.sync) {
-            throw new DependencyNotSyncError(deps)
+            throw new DependencyNotSyncError(key)
         }
         return provider.init()
     }
 
+    /**
+     * Asynchronously requests the dependency specified by the given key,
+     * without statically checking that the dependency is safe to request.
+     *
+     * @param key - A key specifying the dependency to request
+     * @returns A promise resolving to the requested dependency
+     *
+     * @throws {@link Errors.InjectError}
+     * when not all transitive dependencies are met
+     *
+     * @group Request Methods
+     */
     requestAsyncUnchecked<K extends DependencyKey>(deps: K): Promise<ProvidedActual<K, P>> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
@@ -562,23 +560,75 @@ export class Container<P extends Container.Graph> {
         return Promise.resolve(provider.init())
     }
 
-    /** Requests the dependency or dependencies defined by `deps`, or throws if any transitive dependencies are not provided. */
-    readonly request = this.requestUnchecked as <K extends DependencyKey, Th extends CanRequest<P, K>>(
+    /**
+     * Requests the dependency specified by the given key,
+     * statically checking that the dependency is safe to request.
+     *
+     * @param key - A key specifying the dependency to request
+     * @returns The requested dependency
+     *
+     * @group Request Methods
+     */
+    request<K extends DependencyKey, Th extends CanRequest<P, K>>(
         this: Container<P> & Th,
         deps: K,
-    ) => ProvidedActual<K, P>
+    ): ProvidedActual<K, P> {
+        return this.requestUnchecked(deps)
+    }
 
-    readonly requestAsync = this.requestAsyncUnchecked as <K extends DependencyKey, Th extends CanRequest<P, K, never>>(
+    /**
+     * Asynchronously requests the dependency specified by the given key,
+     * statically checking that the dependency is safe to request.
+     *
+     * It is safe to call method when some dependencies cannot be resolved synchronously.
+     *
+     * @param key - A key specifying the dependency to request
+     * @returns A promise resolving to the requested dependency
+     *
+     * @group Request Methods
+     */
+    requestAsync<K extends DependencyKey, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
-    ) => Promise<ProvidedActual<K, P>>
+    ): Promise<ProvidedActual<K, P>> {
+        return this.requestAsyncUnchecked(deps)
+    }
 
-    /** Returns a child of this container, after executing `f` with it. */
+    /**
+     * Creates a child container.
+     * The child inherits all provided types and scopes from this container,
+     * but no changes to the child will affect this container.
+     *
+     * @returns A child of this container
+     *
+     * @group Child Methods
+     */
     createChild(): Container<ChildGraph<P, never>> {
         return new Container({ parent: this })
     }
 
-    /** Returns a `Subcomponent` that passes arguments to `f` to initialize the child container. */
+    /**
+     * @returns A {@link Subcomponent} that passes arguments to the given function to initialize a child container.
+     *
+     * @example
+     *  ```ts
+     *  const myContainer = Container.create()
+     *    .provide(User, MyScope, Inject.construct(User, NameKey, IdKey))
+     *
+     *  const mySubcomponent = myContainer.createSubcomponent(
+     *    (ct, name: string, id: string) => ct
+     *      .addScope(MyScope)
+     *      .provideInstance(NameKey, name)
+     *      .provideInstance(IdKey, id)
+     *  )
+     *
+     *  const childContainer = mySubcomponent('Alice", '123')
+     *
+     *  const user = childContainer.request(User)
+     *  ```
+     *
+     * @group Child Methods
+     */
     createSubcomponent<Args extends any[], P2 extends ProvideGraph = never>(
         f?: (child: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<P2>,
     ): Container.Subcomponent<Args, Merge<P, P2>> {
@@ -588,7 +638,56 @@ export class Container<P extends Container.Graph> {
         }
     }
 
-    /** Apply a list of `Module`s to this container. */
+    /**
+     * Applies the given {@link Module | Modules} or {@link Module.Item | Items} to this container.
+     * All scopes and dependencies provided with the modules will be applied to this container.
+     *
+     * @param modules - The modules to apply to the container.
+     * @returns This container, now typed to include all types provided within the given modules
+     *
+     * @example Apply {@link Module} object:
+     *  ```ts
+     *  const MyModule = Module(ct => ct
+     *    .provide(FooService, () => new FooService())
+     *    .provide(BarService, () => new BarService())
+     *  )
+     *
+     *  const myContainer = Container.create().apply(MyModule)
+     *
+     *  const [fooService, barService] = myContainer.request([FooService, BarService])
+     *  ```
+     *
+     * @example Apply function:
+     *  ```ts
+     *  const myContainer = Container.create().apply(ct => ct
+     *    .provide(FooService, () => new FooService())
+     *    .provide(BarService, () => new BarService())
+     *  )
+     *
+     *  const [fooService, barService] = myContainer.request([FooService, BarService])
+     *  ```
+     *
+     * @example Use `apply` to merge modules:
+     *  ```ts
+     *  const FooModule = Module(ct => ct
+     *    .provide(FooService, () => new FooService())
+     *  )
+     *  const BarModule = Module(ct => ct
+     *    .provide(FooService, () => new FooService())
+     *  )
+     *  const MyModule = Module(ct => ct
+     *    .provide(BazService,
+     *      Inject.construct(BazService, FooService, BarService))
+     *    .apply(FooModule, BarModule)
+     *  )
+     *
+     *  const myContainer = Container.create().apply(MyModule)
+     *
+     *  const [fooService, barService] = myContainer.request([FooService, BarService])
+     *  ```
+     *
+     * @group Provide Methods
+     */
     apply<M extends Module.Item[]>(...modules: M): Container<Merge<P, Module.Provides<M>>> {
         for (let mod of modules) {
             if (mod instanceof Array) {
@@ -602,7 +701,15 @@ export class Container<P extends Container.Graph> {
         return this as Container<any>
     }
 
-    /** Calls the given function with the requested dependencies and returns its output. */
+    /**
+     * Calls the given function with the requested dependencies and returns its output.
+     *
+     * @template Th - A this-type bound enforcing that {@link K} is safe to request
+     * @param deps - A key object specifying which dependencies to request
+     * @param f - A function that accepts the dependencies specified by {@link deps}
+     *
+     * @group Request Methods
+     */
     inject<K extends DependencyKey, R, Th extends CanRequest<P, K>>(
         this: Container<P> & Th,
         deps: K,
@@ -611,6 +718,18 @@ export class Container<P extends Container.Graph> {
         return f(this.requestUnchecked(deps))
     }
 
+    /**
+     * Asynchronously calls the given function with the requested dependencies and returns its output.
+     *
+     * It is safe to call method when some dependencies cannot be resolved synchronously.
+     *
+     * @template Th - A this-type bound enforcing that {@link K} is safe to request
+     * @param deps - A key object specifying which dependencies to request
+     * @param f - A possibly async function that accepts the dependencies specified by {@link deps}
+     * @returns A promise resolving to the output of {@link f}
+     *
+     * @group Request Methods
+     */
     injectAsync<K extends DependencyKey, R, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
@@ -619,7 +738,18 @@ export class Container<P extends Container.Graph> {
         return this.requestAsyncUnchecked(deps).then(f)
     }
 
-    /** Given a `DependencyKey` for a factory-type function, resolve the function, call it with `args`, and return the result. */
+    /**
+     * Given a {@link FactoryKey} or similar, return the result of the factory function
+     * after applying {@link args}.
+     *
+     * @template K - Type of the factory key
+     * @template Th - A this-type bound enforcing that {@link K} is safe to request
+     * @template Args - The factory's parameter list type
+     * @template Out - The factory's return type
+     * @param key - A {@link FactoryKey} or similar key that resolves to a function
+     *
+     * @group Request Methods
+     */
     build<
         K extends DependencyKey,
         Th extends CanRequest<P, K>,
@@ -627,12 +757,26 @@ export class Container<P extends Container.Graph> {
         Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(
         this: Container<P> & Th,
-        deps: K,
+        key: K,
         ...args: Args
     ): Out {
-        return this.requestUnchecked(deps)(...args)
+        return this.requestUnchecked(key)(...args)
     }
 
+    /**
+     * Given a {@link FactoryKey} or similar, asynchronously return the result of the factory function
+     * after applying {@link args}.
+     *
+     * It is safe to call method when some dependencies cannot be resolved synchronously.
+     *
+     * @template K - Type of the factory key
+     * @template Th - A this-type bound enforcing that {@link K} is safe to request
+     * @template Args - The factory's parameter list type
+     * @template Out - The factory's return type
+     * @param key - A {@link FactoryKey} or similar key that resolves to a possibly async function
+     *
+     * @group Request Methods
+     */
     buildAsync<
         K extends DependencyKey,
         Th extends CanRequest<P, K, never>,
@@ -640,10 +784,10 @@ export class Container<P extends Container.Graph> {
         Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(
         this: Container<P> & Th,
-        deps: K,
+        key: K,
         ...args: Args
     ): Promise<Awaited<Out>> {
-        return this.requestAsyncUnchecked(deps).then(f => f(...args))
+        return this.requestAsyncUnchecked(key).then(f => f(...args))
     }
 }
 
@@ -687,11 +831,17 @@ export namespace Container {
         | (S extends any ? DepPair<S, never> : never)
     >
 
+    /**
+     * A {@link Container}-like object used for providing values for a {@link Module}.
+     */
     export interface Builder<P extends Graph = Graph.Empty> {
         /** @internal */
         readonly [_depsTag]: ((d: P) => void) | null
 
-        /** {@inheritDoc Container#provide} */
+        /**
+         * {@inheritDoc Container#provide}
+         * @see {@link Container#provide}
+         */
         provide<
             K extends TypeKey<any> | InjectableClass<any>,
             SrcK extends DependencyKey = undefined,
@@ -713,6 +863,10 @@ export namespace Container {
             | PairForProvideIsSync<K, Sync, S>
         >>
 
+        /**
+         * {@inheritDoc Container#provideAsync}
+         * @see {@link Container#provideAsync}
+         */
         provideAsync<
             K extends TypeKey<any> | InjectableClass<any>,
             SrcK extends DependencyKey = undefined,
@@ -729,15 +883,26 @@ export namespace Container {
             ]
         ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
 
-        /** Registers 'key' to provide the given `instance`. */
+        /**
+         * {@inheritDoc Container#provideInstance}
+         * @see {@link Container#provideInstance}
+         */
         provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Builder<
             Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
         >
 
+        /**
+         * {@inheritDoc Container#addScope}
+         * @see {@link Container#addScope}
+         */
         addScope<S extends Scope>(...scope: S[]): Builder<
             Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
         >
 
+        /**
+         * {@inheritDoc Container#apply}
+         * @see {@link Container#apply}
+         */
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
     }
 }

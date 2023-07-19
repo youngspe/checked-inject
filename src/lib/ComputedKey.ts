@@ -1,4 +1,5 @@
-import { InjectError, Container } from './Container'
+import { Container } from './Container'
+import { InjectError } from './InjectError'
 import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'

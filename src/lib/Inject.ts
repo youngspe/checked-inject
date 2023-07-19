@@ -1,4 +1,5 @@
-import { Container, InjectError, DependencyNotSyncError } from './Container'
+import { Container } from './Container'
+import { InjectError, DependencyNotSyncError } from './InjectError'
 import { ProvidedActual, Actual, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
 import { ComputedKey } from './ComputedKey'
 import { Initializer, maybePromiseThen } from './_internal'
