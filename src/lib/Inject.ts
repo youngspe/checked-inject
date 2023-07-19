@@ -1,6 +1,6 @@
 import { Container } from './Container'
 import { InjectError, DependencyNotSyncError } from './InjectError'
-import { ProvidedActual, Actual, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
+import { Target, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
 import { ComputedKey } from './ComputedKey'
 import { Initializer, maybePromiseThen } from './_internal'
 import { ProvideGraph, ChildGraph, FlatGraph } from './ProvideGraph'
@@ -28,14 +28,14 @@ export namespace Inject {
     }
 
     export abstract class Map<T, K extends DependencyKey, P extends ProvideGraph = never> extends ComputedKey<T, K, DepsOf<K>, P> {
-        private readonly _transform: (deps: ProvidedActual<K, P>) => T
+        private readonly _transform: (deps: Target<K, P>) => T
 
-        constructor(src: K, transform: (deps: ProvidedActual<K, P>) => T) {
+        constructor(src: K, transform: (deps: Target<K, P>) => T) {
             super(src)
             this._transform = transform
         }
 
-        init(deps: InjectError | Initializer<ProvidedActual<K, P>>): InjectError | Initializer<T> {
+        init(deps: InjectError | Initializer<Target<K, P>>): InjectError | Initializer<T> {
             if (deps instanceof InjectError) return deps
             if (deps.sync) return {
                 sync: true,
@@ -54,12 +54,12 @@ export namespace Inject {
         T,
         K extends DependencyKey,
         P extends ProvideGraph = never,
-    >(src: K, transform: (deps: ProvidedActual<K, P>) => T): Map<T, K, P> {
+    >(src: K, transform: (deps: Target<K, P>) => T): Map<T, K, P> {
         return new _Map(src, transform)
     }
 
-    class From<K extends DependencyKey> extends ComputedKey<Actual<K>, K> {
-        init(deps: InjectError | Initializer<Actual<K>>): InjectError | Initializer<Actual<K>> {
+    class From<K extends DependencyKey> extends ComputedKey<Target<K>, K> {
+        init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer<Target<K>> {
             return deps
         }
     }
@@ -70,22 +70,22 @@ export namespace Inject {
 
     export function construct<
         T, K extends DependencyKey[], P extends ProvideGraph = never,
-    >(ctor: new (...args: ProvidedActual<K, P>) => T, ...deps: K) {
+    >(ctor: new (...args: Target<K, P>) => T, ...deps: K) {
         return map<T, K, P>(deps, deps => new ctor(...deps))
     }
 
     export function call<
         T, K extends DependencyKey[], P extends ProvideGraph = never,
-    >(init: (...args: ProvidedActual<K, P>) => T, ...deps: K) {
+    >(init: (...args: Target<K, P>) => T, ...deps: K) {
         return map<T, K, P>(deps, deps => init(...deps))
     }
 
-    export abstract class GetLazy<K extends DependencyKey> extends ComputedKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
-        override init(deps: Initializer<Actual<K>> | InjectError): Initializer<() => Actual<K>> | InjectError {
+    export abstract class GetLazy<K extends DependencyKey> extends ComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+        override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()
-            let d: Initializer.Sync<Actual<K>> | null = deps
-            let value: Actual<K> | null = null
+            let d: Initializer.Sync<Target<K>> | null = deps
+            let value: Target<K> | null = null
 
 
             const f = () => {
@@ -93,7 +93,7 @@ export namespace Inject {
                     value = d.init()
                     d = null
                 }
-                return value as Actual<K>
+                return value as Target<K>
             }
             return { sync: true, init: () => f }
         }
@@ -106,8 +106,8 @@ export namespace Inject {
         return new _GetLazy(src)
     }
 
-    export abstract class GetProvider<K extends DependencyKey> extends ComputedKey<() => Actual<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
-        override init(deps: Initializer<Actual<K>> | InjectError): Initializer<() => Actual<K>> | InjectError {
+    export abstract class GetProvider<K extends DependencyKey> extends ComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+        override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()
             const f = () => deps.init()
@@ -122,8 +122,8 @@ export namespace Inject {
         return new _GetProvider(src)
     }
 
-    export abstract class Optional<K extends DependencyKey> extends ComputedKey<Actual<K> | undefined, K, never, never, IsSyncDepsOf<K>> {
-        override init(deps: Initializer<Actual<K>> | InjectError): Initializer<Actual<K> | undefined> {
+    export abstract class Optional<K extends DependencyKey> extends ComputedKey<Target<K> | undefined, K, never, never, IsSyncDepsOf<K>> {
+        override init(deps: Initializer<Target<K>> | InjectError): Initializer<Target<K> | undefined> {
             if (deps instanceof InjectError) return { sync: true, init: () => undefined }
             return deps
         }
@@ -139,7 +139,7 @@ export namespace Inject {
     export abstract class Build<
         K extends DependencyKey.Of<(...args: Args) => Out>,
         Args extends any[],
-        Out = ReturnType<Actual<K>>,
+        Out = ReturnType<Target<K>>,
     > extends Map<Out, K> {
         constructor(inner: K, ...args: Args) {
             super(inner, fac => fac(...args))
@@ -148,19 +148,19 @@ export namespace Inject {
     class _Build<
         K extends DependencyKey.Of<(...args: Args) => Out>,
         Args extends any[],
-        Out = ReturnType<Actual<K>>,
+        Out = ReturnType<Target<K>>,
     > extends Build<K, Args, Out> { }
 
     export function build<
         K extends DependencyKey.Of<(...args: Args) => Out>,
         Args extends any[],
-        Out = ReturnType<Actual<K>>,
+        Out = ReturnType<Target<K>>,
     >(src: K, ...args: Args): Build<K, Args, Out> {
         return new _Build(src, ...args)
     }
 
-    export abstract class Async<K extends DependencyKey> extends ComputedKey<Promise<Actual<K>>, K, DepsOf<K>, never, never> {
-        override init(deps: InjectError | Initializer<Actual<K>>): InjectError | Initializer.Sync<Promise<Actual<K>>> {
+    export abstract class Async<K extends DependencyKey> extends ComputedKey<Promise<Target<K>>, K, DepsOf<K>, never, never> {
+        override init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer.Sync<Promise<Target<K>>> {
             if (deps instanceof InjectError) return deps
             return { sync: true, init: () => Promise.resolve(deps.init()) }
         }

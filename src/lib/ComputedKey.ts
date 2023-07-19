@@ -1,7 +1,7 @@
 import { Container } from './Container'
 import { InjectError } from './InjectError'
 import { Dependency } from './Dependency'
-import { DependencyKey, DepsOf, ProvidedActual, IsSyncDepsOf } from './DependencyKey'
+import { DependencyKey, DepsOf, Target, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
 
@@ -32,7 +32,7 @@ export abstract class ComputedKey<
     }
 
     /** Given a provide of `D` or an error, return a provider of `T` or an error. */
-    abstract init(deps: Initializer<ProvidedActual<K, P>> | InjectError): Initializer<T> | InjectError
+    abstract init(deps: Initializer<Target<K, P>> | InjectError): Initializer<T> | InjectError
 }
 
 /** @internal */

@@ -1,5 +1,5 @@
 import { Inject } from './Inject'
-import { DependencyKey, SimpleKey, ProvidedActual } from './DependencyKey'
+import { DependencyKey, SimpleKey, Target } from './DependencyKey'
 import { Container } from './Container'
 
 import ProvideGraph = Container.Graph
@@ -37,7 +37,7 @@ export abstract class AbstractKey {
         Th extends DependencyKey,
         U,
         P extends ProvideGraph = never
-    >(this: Th, transform: (x: ProvidedActual<Th, P>) => U): Inject.Map<U, Th, P> {
+    >(this: Th, transform: (x: Target<Th, P>) => U): Inject.Map<U, Th, P> {
         return Inject.map(this, transform)
     }
 }

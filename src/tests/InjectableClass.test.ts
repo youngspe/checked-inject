@@ -1,4 +1,4 @@
-import { Actual, Inject, InjectableClass, Module, TypeKey } from "../lib";
+import { Inject, InjectableClass, Module, TypeKey } from "../lib";
 import { sleep } from "./utils";
 
 const Keys = {
@@ -28,9 +28,9 @@ describe(InjectableClass, () => {
             c: User.Map(u => u.name),
         })
 
-        expect(a).toEqual({ name: 'alice', id: '123'})
+        expect(a).toEqual({ name: 'alice', id: '123' })
         expect(b).toHaveProperty('then')
-        expect(await b).toEqual({ name: 'alice', id: '123'})
+        expect(await b).toEqual({ name: 'alice', id: '123' })
         expect(c).toEqual('alice')
     })
 
@@ -55,9 +55,9 @@ describe(InjectableClass, () => {
             c: User.Map(u => u.name),
         })
 
-        expect(a).toEqual({ name: 'alice', id: '123'})
+        expect(a).toEqual({ name: 'alice', id: '123' })
         expect(b).toHaveProperty('then')
-        expect(await b).toEqual({ name: 'alice', id: '123'})
+        expect(await b).toEqual({ name: 'alice', id: '123' })
         expect(c).toEqual('alice')
     })
 })

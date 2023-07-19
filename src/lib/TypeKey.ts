@@ -2,7 +2,7 @@ import { Inject } from './Inject'
 import { ComputedKey, HasComputedKeySymbol } from './ComputedKey'
 import { AbstractKey } from './AbstractKey'
 import { ScopeList } from './Scope'
-import { DependencyKey, Actual } from './DependencyKey'
+import { DependencyKey, Target } from './DependencyKey'
 import { AbstractClass, Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
@@ -10,7 +10,7 @@ import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 /** @internal */
 export interface HasTypeKeySymbol<out T> {
 
-/** @internal */
+    /** @internal */
     readonly [_typeKeySymbol]: readonly [T] | null
 }
 
@@ -90,7 +90,7 @@ export namespace TypeKey {
 
     export interface DefaultWithDeps<T, K extends DependencyKey> {
         deps: K
-        init(deps: Actual<K>): T
+        init(deps: Target<K>): T
     }
     export interface DefaultWithInstance<T> { instance: T }
     export interface DefaultFunction<T> { (): T }
@@ -110,7 +110,7 @@ export function FactoryKey<
     T,
     Args extends any[],
     K extends DependencyKey,
->(deps: K, fac: (deps: Actual<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>>
+>(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>>
 
 export function FactoryKey<
     T,
@@ -119,7 +119,7 @@ export function FactoryKey<
 >(
     ...args:
         | []
-        | [deps: K, fac: (deps: Actual<K>, ...args: Args) => T]
+        | [deps: K, fac: (deps: Target<K>, ...args: Args) => T]
 ): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>> {
     if (args.length == 2) {
         let [deps, fac] = args

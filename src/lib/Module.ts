@@ -1,4 +1,4 @@
-import { DependencyKey, ProvidedActual } from './DependencyKey'
+import { DependencyKey, Target } from './DependencyKey'
 import { Container } from './Container'
 import { Merge } from './ProvideGraph'
 import { unresolved, CanRequest } from './CanRequest'
@@ -22,7 +22,7 @@ function requestAsyncForModule<P extends ProvideGraph, K extends DependencyKey>(
     return Container.create().apply(mod).requestAsyncUnchecked(deps)
 }
 
-type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = ProvidedActual<K, Merge<DefaultGraph, P>>
+type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = Target<K, Merge<DefaultGraph, P>>
 
 /** An object used to provide definitions to a `Container` */
 export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {

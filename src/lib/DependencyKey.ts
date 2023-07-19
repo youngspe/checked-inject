@@ -5,7 +5,7 @@ import { PrivateConstruct } from './_internal'
 import { BaseTypeKey, HasTypeKeySymbol } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync } from './Dependency'
-import { Merge, ProvideGraph } from './ProvideGraph'
+import { Merge } from './ProvideGraph'
 
 interface OnlyObject<out T = unknown> {
     readonly [k: keyof any]: T
@@ -36,7 +36,7 @@ export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = a
     | HasComputedKeySymbol<T, D, Sync>
 
 /** The actual type that a dependency key of type `D` resolves to. */
-export type Actual<K extends DependencyKey> =
+type Actual<K extends DependencyKey> =
     K extends DependencyKey.Of<infer _T> ? (
         K extends HasComputedKeySymbol<infer T> | HasTypeKeySymbol<infer T> ? T :
         K extends InjectableClass<infer T> ? T :
@@ -68,7 +68,7 @@ type Leaves<T> =
     T extends (...args: any[]) => infer U ? Leaves<U> :
     T
 
-type ContainerTransform<T, P extends ProvideGraph> =
+type ContainerTransform<T, P extends Container.Graph> =
     [P] extends [never] ? T : Container<any> extends Leaves<T> ? (
         T extends [] ? [] :
         T extends readonly [infer A, ...infer B] ? [
@@ -85,7 +85,12 @@ type ContainerTransform<T, P extends ProvideGraph> =
         T
     ) : T
 
-export type ProvidedActual<K extends DependencyKey, P extends ProvideGraph> = ContainerTransform<Actual<K>, P>
+type _Target<K extends DependencyKey, P extends Container.Graph = never> = ContainerTransform<Actual<K>, P>
+
+export type Target<K extends DependencyKey, P extends Container.Graph = never> =
+    // This conditional prevents Target from expanding to ContainerTransform in docs
+    [K] extends [infer _] ? _Target<K, P> : _Target<K, P>
+
 
 /** @internal */
 export abstract class UnableToResolve<in out K> {

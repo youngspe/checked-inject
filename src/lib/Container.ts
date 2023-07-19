@@ -4,7 +4,7 @@ import { Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
-import { Actual, ProvidedActual, DepsOf, DependencyKey } from './DependencyKey'
+import { Target, DepsOf, DependencyKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
@@ -223,8 +223,8 @@ export class Container<P extends Container.Graph> {
     }
 
     // Returns a provider for the given `DependencyKey`, or an error if any of its transitive dependencies are not provided.
-    private _getProvider<K extends DependencyKey>(deps: K): Initializer<ProvidedActual<K, P>> | InjectError {
-        type T = ProvidedActual<K, P>
+    private _getProvider<K extends DependencyKey>(deps: K): Initializer<Target<K, P>> | InjectError {
+        type T = Target<K, P>
 
         if (deps == null) return { sync: true, init: () => deps as T }
         if (Object.is(deps, Container.Key)) return { sync: true, init: () => this as T }
@@ -234,10 +234,10 @@ export class Container<P extends Container.Graph> {
         const arrayLength = deps instanceof Array ? deps.length : null
 
         type _K = NonNullable<K>
-        type _T = { [X in keyof _K]: ProvidedActual<_K[X], P> }
+        type _T = { [X in keyof _K]: Target<_K[X], P> }
         let _deps = deps as { [X in keyof _K]: _K[X] & DependencyKey.Of<_T[X]> }
 
-        const providers: { [X in keyof _K]?: Initializer<ProvidedActual<_K[X], P>> } = arrayLength == null ? {} : new Array(arrayLength) as any
+        const providers: { [X in keyof _K]?: Initializer<Target<_K[X], P>> } = arrayLength == null ? {} : new Array(arrayLength) as any
         let allSync = true
 
         let failed = false
@@ -301,11 +301,11 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: [scope: ScopeList<S>] | [],
             ...init:
-            | [ComputedKey<Actual<K>, any, D, P, Sync>]
-            | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>],
+            | [ComputedKey<Target<K>, any, D, P, Sync>]
+            | [...deps: [SrcK] | [], init: (deps: Target<SrcK, P>) => Target<K>],
         ]
     ): this {
-        type T = Actual<K>
+        type T = Target<K>
         // If no scope was provided, fall back to key.scope, which may or may not be defined
         const keyScope = key.scope
         const scopeIndex = 0 as const
@@ -326,7 +326,7 @@ export class Container<P extends Container.Graph> {
             const hasDepsArg = args.length - (hasScopeArg ? 1 : 0) >= 2
 
             const deps = hasDepsArg ? args[args.length - 2] as SrcK : undefined as SrcK
-            const init = args[args.length - 1] as (deps: ProvidedActual<SrcK, P>) => T
+            const init = args[args.length - 1] as (deps: Target<SrcK, P>) => T
             entry = {
                 value: {
                     binding: Inject.map(deps, init),
@@ -419,9 +419,9 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [init: ComputedKey<Actual<K>, any, D, P, Sync>]
-            | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
-            | [init: () => Actual<K>]
+            | [init: ComputedKey<Target<K>, any, D, P, Sync>]
+            | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
+            | [init: () => Target<K>]
         ]
     ): Container<Provide<
         P,
@@ -474,9 +474,9 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [init: ComputedKey<ValueOrPromise<Actual<K>>, any, D, P, any>]
-            | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => ValueOrPromise<Actual<K>>]
-            | [init: () => ValueOrPromise<Actual<K>>]
+            | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, P, any>]
+            | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
+            | [init: () => ValueOrPromise<Target<K>>]
         ]
     ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
         return this._provide(false, key as any, ...args) as any
@@ -492,10 +492,10 @@ export class Container<P extends Container.Graph> {
      *
      * @group Provide Methods
      */
-    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Container<
+    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Container<
         Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
     > {
-        type T = Actual<K>
+        type T = Target<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
         this._setKeyProvider(_key, { value: { instance } })
         return this as any
@@ -529,7 +529,7 @@ export class Container<P extends Container.Graph> {
      *
      * @group Request Methods
      */
-    requestUnchecked<K extends DependencyKey>(key: K): ProvidedActual<K, P> {
+    requestUnchecked<K extends DependencyKey>(key: K): Target<K, P> {
         const provider = this._getProvider(key)
         if (provider instanceof InjectError) {
             throw provider
@@ -552,7 +552,7 @@ export class Container<P extends Container.Graph> {
      *
      * @group Request Methods
      */
-    requestAsyncUnchecked<K extends DependencyKey>(deps: K): Promise<ProvidedActual<K, P>> {
+    requestAsyncUnchecked<K extends DependencyKey>(deps: K): Promise<Target<K, P>> {
         const provider = this._getProvider(deps)
         if (provider instanceof InjectError) {
             throw provider
@@ -565,14 +565,14 @@ export class Container<P extends Container.Graph> {
      * statically checking that the dependency is safe to request.
      *
      * @param key - A key specifying the dependency to request
-     * @returns The requested dependency
+     * @returns {Target<K, P>} The requested dependency
      *
      * @group Request Methods
      */
     request<K extends DependencyKey, Th extends CanRequest<P, K>>(
         this: Container<P> & Th,
         deps: K,
-    ): ProvidedActual<K, P> {
+    ): Target<K, P> {
         return this.requestUnchecked(deps)
     }
 
@@ -590,7 +590,7 @@ export class Container<P extends Container.Graph> {
     requestAsync<K extends DependencyKey, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
-    ): Promise<ProvidedActual<K, P>> {
+    ): Promise<Target<K, P>> {
         return this.requestAsyncUnchecked(deps)
     }
 
@@ -713,7 +713,7 @@ export class Container<P extends Container.Graph> {
     inject<K extends DependencyKey, R, Th extends CanRequest<P, K>>(
         this: Container<P> & Th,
         deps: K,
-        f: (deps: ProvidedActual<K, P>) => R,
+        f: (deps: Target<K, P>) => R,
     ): R {
         return f(this.requestUnchecked(deps))
     }
@@ -733,7 +733,7 @@ export class Container<P extends Container.Graph> {
     injectAsync<K extends DependencyKey, R, Th extends CanRequest<P, K, never>>(
         this: Container<P> & Th,
         deps: K,
-        f: (deps: ProvidedActual<K, P>) => R | Promise<R>,
+        f: (deps: Target<K, P>) => R | Promise<R>,
     ): Promise<R> {
         return this.requestAsyncUnchecked(deps).then(f)
     }
@@ -753,8 +753,8 @@ export class Container<P extends Container.Graph> {
     build<
         K extends DependencyKey,
         Th extends CanRequest<P, K>,
-        Args extends ProvidedActual<K, P> extends (...args: infer A) => Out ? A : never,
-        Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
+        Args extends Target<K, P> extends (...args: infer A) => Out ? A : never,
+        Out = Target<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(
         this: Container<P> & Th,
         key: K,
@@ -780,8 +780,8 @@ export class Container<P extends Container.Graph> {
     buildAsync<
         K extends DependencyKey,
         Th extends CanRequest<P, K, never>,
-        Args extends ProvidedActual<K, P> extends (...args: infer A) => Out ? A : never,
-        Out = ProvidedActual<K, P> extends (...args: Args) => infer O ? O : unknown,
+        Args extends Target<K, P> extends (...args: infer A) => Out ? A : never,
+        Out = Target<K, P> extends (...args: Args) => infer O ? O : unknown,
     >(
         this: Container<P> & Th,
         key: K,
@@ -853,9 +853,9 @@ export namespace Container {
             ...args: [
                 ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [init: ComputedKey<Actual<K>, any, D, P, Sync>]
-                | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
-                | [init: () => Actual<K>]
+                | [init: ComputedKey<Target<K>, any, D, P, Sync>]
+                | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
+                | [init: () => Target<K>]
             ]
         ): Builder<Provide<
             P,
@@ -877,9 +877,9 @@ export namespace Container {
             ...args: [
                 ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [init: ComputedKey<ValueOrPromise<Actual<K>>, any, D, P, any>]
-                | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => ValueOrPromise<Actual<K>>]
-                | [init: () => ValueOrPromise<Actual<K>>]
+                | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, P, any>]
+                | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
+                | [init: () => ValueOrPromise<Target<K>>]
             ]
         ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
 
@@ -887,7 +887,7 @@ export namespace Container {
          * {@inheritDoc Container#provideInstance}
          * @see {@link Container#provideInstance}
          */
-        provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Actual<K>): Builder<
+        provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Builder<
             Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
         >
 
