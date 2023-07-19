@@ -34,6 +34,7 @@ export abstract class ComputedKey<
     abstract init(deps: Initializer<ProvidedActual<K, P>> | InjectError): Initializer<T> | InjectError
 }
 
+/** @internal */
 export namespace ComputedKey {
     /** @internal */
     export interface Any<out T = any> extends ComputedKey<T, any, any, any> { }

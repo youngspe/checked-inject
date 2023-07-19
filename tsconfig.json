@@ -109,6 +109,13 @@
     ],
     "out": "docs",
     "excludePrivate": true,
-    "excludeReferences": true,
+    // "excludeReferences": true,
+    "navigation": {
+      "includeCategories": true,
+      "includeGroups": true,
+    },
+    "sort": [
+      "alphabetical",
+    ],
   }
 }

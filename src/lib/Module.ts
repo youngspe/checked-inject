@@ -6,6 +6,7 @@ import { unresolved, CanRequest } from './CanRequest'
 import DefaultGraph = Container.DefaultGraph
 import ProvideGraph = Container.Graph
 import FlatGraph = ProvideGraph.Flat
+import EmptyGraph = ProvideGraph.Empty
 
 function requestForModule<P extends ProvideGraph, K extends DependencyKey>(
     mod: Module.ApplyTo<P>,
@@ -120,7 +121,7 @@ export namespace Module {
         M extends ApplyTo<infer P> | FunctionItem<infer P> ? P :
         M extends readonly [infer A] ? Provides<A> :
         M extends readonly [infer A, ...infer B] ? Merge<Provides<A>, Provides<B>> :
-        M extends [] ? FlatGraph<never> :
+        M extends [] ? EmptyGraph :
         never
 
     export interface ApplyTo<P extends ProvideGraph = any> {

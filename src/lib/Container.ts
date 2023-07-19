@@ -9,6 +9,7 @@ import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, unresolved } from './CanRequest'
+import type { AbstractKey } from './AbstractKey'
 
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
@@ -111,6 +112,8 @@ type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends 
 
 const _classTypeKey = Symbol()
 const _depsTag = Symbol()
+type Opt<T> = T | []
+type ValueOrPromise<T> = T | Promise<T>
 
 /** The dependency injection container for `structured-injection`. */
 export class Container<P extends Container.Graph> {
@@ -401,6 +404,56 @@ export class Container<P extends Container.Graph> {
         return this
     }
 
+    /**
+     * Specifies how to resolve the target type of the given key or class.
+     *
+     * @example
+     *
+     * Provide the {@link TypeKey} `NameKey` with a function returning a string:
+     *
+     *  ```ts
+     * myContainer.provide(NameKey, () => 'Alice')
+     *  ```
+     *
+     * Provide the {@link TypeKey} `IdKey` within the {@link Scope} `MyScope`,
+     * so the function is only called once per container with `MyScope`
+     *
+     *  ```ts
+     *  myContainer.provide(IdKey, MyScope, () => '123')
+     *  ```
+     *
+     * Provide an instance of `User` using a dependency object and a function.
+     *
+     * The dependency object can be an object with {@link DependencyKey} properties, like so:
+     *
+     *  ```ts
+     *  myContainer.provide(User, {
+     *    name: NameKey,
+     *    id: IdKey,
+     *  }, ({ name, id }) => new User(name, user))
+     *  ```
+     *
+     * Provide `User` using a {@link ComputedKey}, `{@link Inject.construct}`
+     *
+     *  ```ts
+     *  myContainer.provide(User, Inject.construct(User, NameKey, IdKey))
+     *  ```
+     *
+     * @template K - The type of the key or class object
+     * @template SrcK - Identifies the source data for the provider
+     * @template D - Identifies the dependencies of the provided type
+     * @template Sync - Identifies the dependencies for the type to be resolved synchronously
+     * @param key - The key or class of the type to be provided
+     * @param args - The remaining arguments. These include:
+     *  * `scope` (optional): The {@link Scope} or {@link ScopeList} to which to bind the provided value
+     *  And one of the following:
+     *  * `init`: A function returning the provided value, or a {@link ComputedKey} yielding the provided value
+     *  * `deps, init`:
+     *    * deps: An object specifying which dependencies are required to provide the value
+     *    * init: A function that accepts the dependencies specified by `deps` and returns the provided value
+     *
+     * @returns This container, now typed to include the provided type and its dependencies
+     */
     provide<
         K extends TypeKey<any> | InjectableClass<any>,
         SrcK extends DependencyKey = undefined,
@@ -410,10 +463,11 @@ export class Container<P extends Container.Graph> {
     >(
         key: K,
         ...args: [
-            ...scope: [scope: ScopeList<S>] | [],
+            ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [ComputedKey<Actual<K>, any, D, P, Sync>]
-            | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
+            | [init: ComputedKey<Actual<K>, any, D, P, Sync>]
+            | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
+            | [init: () => Actual<K>]
         ]
     ): Container<Provide<
         P,
@@ -423,6 +477,37 @@ export class Container<P extends Container.Graph> {
         return this._provide(true, key, ...args) as any
     }
 
+    /**
+     * Specifies how to asynchronously resolve the target type of the given key or class.
+     * The signature is the same as {@link provide}, except that a {@link Promise} to the target type can be provided.
+     * The provided type cannot be directly requested through {@link request}.
+     * It can, however be requested through {@link requestAsync} or by using {@link TypeKey#Async | key.Async()}.
+     *
+     * @example
+     *
+     *  ```ts
+     * myContainer.provideAsync(
+     *  NameKey,
+     *  { NameService }, async ({ NameService }) => await NameService.getName(),
+     * )
+     *  ```
+     *
+     *
+     * @template K - The type of the key or class object
+     * @template SrcK - Identifies the source data for the provider
+     * @template D - Identifies the dependencies of the provided type
+     * @param key - The key or class of the type to be provided
+     * @param args - The remaining arguments. These include:
+     *  * `scope` (optional): The {@link Scope} or {@link ScopeList} to which to bind the provided value
+     *  And one of the following:
+     *  * `init`: An async function returning the provided value,
+     *    or a {@link ComputedKey} yielding the provided value or a promise
+     *  * `deps, init`:
+     *    * deps: An object specifying which dependencies are required to provide the value
+     *    * init: An async function that accepts the dependencies specified by `deps` and returns the provided value
+     *
+     * @returns This container, now typed to include the provided type and its dependencies
+     */
     provideAsync<
         K extends TypeKey<any> | InjectableClass<any>,
         SrcK extends DependencyKey = undefined,
@@ -431,10 +516,11 @@ export class Container<P extends Container.Graph> {
     >(
         key: K,
         ...args: [
-            ...scope: [scope: ScopeList<S>] | [],
+            ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [ComputedKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
-            | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>]
+            | [init: ComputedKey<ValueOrPromise<Actual<K>>, any, D, P, any>]
+            | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => ValueOrPromise<Actual<K>>]
+            | [init: () => ValueOrPromise<Actual<K>>]
         ]
     ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
         return this._provide(false, key as any, ...args) as any
@@ -562,7 +648,9 @@ export class Container<P extends Container.Graph> {
 }
 
 export namespace Container {
-    export class Key extends TypeKey<Container<Graph.Flat<never>>>({ name: Container.name }) { static readonly keyTag = Symbol() }
+    /** Key used to request an instance of {@link Container}. This is automatically provided to each container. */
+    export class Key extends TypeKey<Container<Graph.Empty>>({ name: Container.name }) { static readonly keyTag = Symbol() }
+    /** @internal */
     export const inject = Inject.from(Key)
 
     /** A function that returns a new subcomponent instance using the given arguments. */
@@ -570,14 +658,28 @@ export namespace Container {
         (...arg: Args): Container<P>
     }
 
-    export type Graph<E extends Graph.Edges = Graph.Edges> = ProvideGraph<E>
+    /**
+     * A type representing the dependency graph of all {@link TypeKey | TypeKeys} and {@link InjectableClass | InjectableClasses}
+     * that have been provided to a {@link Container}.
+     */
+    export type Graph = ProvideGraph
 
     export namespace Graph {
-        export type Flat<E extends Edges = Edges> = FlatGraph<E>
-        export type Child<Parent extends Graph, E extends Edges = Edges> = ChildGraph<Parent, E>
-        export type Edges = GraphPairs
+        /** A graph with no provided types. */
+        export type Empty = FlatGraph<never>
+        /** A graph with no parent container. */
+        export type Flat = FlatGraph
+        /** A graph for a container with graph {@link Parent}. */
+        export type Child<Parent extends Graph> = ChildGraph<Parent>
+        /**
+         * A graph resulting from applying all provided types of {@link B} to {@link A}.
+         */
+        export type Merge<A extends Graph, B extends Graph> = import('./ProvideGraph').Merge<A, B>
     }
 
+    /**
+     * The {@link Graph} of a container returned by {@link Container#provide}
+    */
     export type DefaultGraph<S extends Scope = never> = FlatGraph<
         | DepPair<typeof Singleton, never>
         | DepPair<typeof Container.Key, never>
@@ -585,10 +687,11 @@ export namespace Container {
         | (S extends any ? DepPair<S, never> : never)
     >
 
-    export interface Builder<P extends Graph = Graph.Flat<never>> {
+    export interface Builder<P extends Graph = Graph.Empty> {
         /** @internal */
         readonly [_depsTag]: ((d: P) => void) | null
 
+        /** {@inheritDoc Container#provide} */
         provide<
             K extends TypeKey<any> | InjectableClass<any>,
             SrcK extends DependencyKey = undefined,
@@ -598,10 +701,11 @@ export namespace Container {
         >(
             key: K,
             ...args: [
-                ...scope: [scope: ScopeList<S>] | [],
+                ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [ComputedKey<Actual<K>, any, D, P, Sync>]
-                | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
+                | [init: ComputedKey<Actual<K>, any, D, P, Sync>]
+                | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => Actual<K>]
+                | [init: () => Actual<K>]
             ]
         ): Builder<Provide<
             P,
@@ -617,10 +721,11 @@ export namespace Container {
         >(
             key: K,
             ...args: [
-                ...scope: [scope: ScopeList<S>] | [],
+                ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [ComputedKey<Actual<K> | Promise<Actual<K>>, SrcK, D, P, any>]
-                | [...deps: [SrcK] | [], init: (deps: ProvidedActual<SrcK, P>) => Actual<K> | Promise<Actual<K>>]
+                | [init: ComputedKey<ValueOrPromise<Actual<K>>, any, D, P, any>]
+                | [deps: SrcK, init: (deps: ProvidedActual<SrcK, P>) => ValueOrPromise<Actual<K>>]
+                | [init: () => ValueOrPromise<Actual<K>>]
             ]
         ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
 
