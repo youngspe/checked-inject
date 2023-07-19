@@ -57,7 +57,8 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
-interface TypeKeyClass<out T, Def extends HasComputedKeySymbol<T>> extends
+/** @internal */
+export interface TypeKeyClass<out T, Def extends HasComputedKeySymbol<T>> extends
     AbstractKey,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }

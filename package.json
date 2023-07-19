@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "",
   "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "npm run build && jest",
