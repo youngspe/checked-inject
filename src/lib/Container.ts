@@ -66,13 +66,13 @@ type ValueOrPromise<T> = T | Promise<T>
  * @category Container
  */
 export class Container<P extends Container.Graph> {
-    /** @internal */
+    /** @ignore */
     [unresolved]!: ['missing dependencies:']
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
     private readonly _parent?: Container<any>
-    /** @internal */
+    /** @ignore */
     readonly [_depsTag]: ((d: P) => void) | null = null
     private readonly scopes: Scope[]
 
@@ -803,7 +803,7 @@ export class Container<P extends Container.Graph> {
 export namespace Container {
     /** Key used to request an instance of {@link Container}. This is automatically provided to each container. */
     export class Key extends TypeKey<Container<Graph.Empty>>({ name: Container.name }) { static readonly keyTag = Symbol() }
-    /** @internal */
+    /** @ignore */
     export const inject = Inject.from(Key)
 
     /** A function that returns a new subcomponent instance using the given arguments. */
@@ -844,7 +844,7 @@ export namespace Container {
      * A {@link Container}-like object used for providing values for a {@link Module}.
      */
     export interface Builder<P extends Graph = Graph.Empty> {
-        /** @internal */
+        /** @ignore */
         readonly [_depsTag]: ((d: P) => void) | null
 
         /**

@@ -7,10 +7,10 @@ import { AbstractClass, Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
-/** @internal */
+/** @ignore */
 export interface HasTypeKeySymbol<out T> {
 
-    /** @internal */
+    /** @ignore */
     readonly [_typeKeySymbol]: readonly [T] | null
 }
 
@@ -20,7 +20,7 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 const _typeKeySymbol: unique symbol = Symbol()
 
 export interface BaseTypeKey<out T = any, Def extends HasComputedKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
-    /** @internal */
+    /** @ignore */
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
     readonly scope?: ScopeList
     readonly name: string
@@ -38,26 +38,26 @@ export interface TypeKey<out T = any, Def extends ComputedKey.Any<T> = any> exte
     readonly keyTag: symbol
 }
 
-/** @internal */
+/** @ignore */
 export interface BaseTypeKeyWithoutDefault extends BaseTypeKey<any, never> { }
 
-/** @internal */
+/** @ignore */
 export interface BaseTypeKeyWithDefault<
     out T,
     D extends Dependency,
     Sync extends Dependency,
 > extends BaseTypeKey<T, HasComputedKeySymbol<T, D, Sync>> { }
 
-/** @internal */
+/** @ignore */
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
-/** @internal */
+/** @ignore */
 export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
     | BaseTypeKeyWithDefault<T, D, Sync>
     | ClassWithDefault<T, D, Sync>
 
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
-/** @internal */
+/** @ignore */
 export interface TypeKeyClass<out T, Def extends HasComputedKeySymbol<T>> extends
     AbstractKey,
     AbstractClass<any, [never]>,

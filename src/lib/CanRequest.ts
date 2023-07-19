@@ -11,14 +11,12 @@ type UnresolvedKeys<
     Sync extends Dependency = IsSyncDepsOf<K>,
 > = DepsForKey<P, DepsOf<K> | Sync>
 
-/** @internal */
 export const unresolved = Symbol()
 
 interface RequestFailed<K> {
     [unresolved]: [(K extends any ? [K] : never)[0]]
 }
 
-/** @internal */
 export type CanRequest<
     P extends ProvideGraph,
     K extends DependencyKey,

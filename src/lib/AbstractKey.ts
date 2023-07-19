@@ -4,7 +4,6 @@ import { Container } from './Container'
 
 import ProvideGraph = Container.Graph
 
-/** @internal */
 export abstract class AbstractKey {
     /**
      * Requests a function returning a lazily-computed value for this key.

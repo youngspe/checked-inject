@@ -58,14 +58,16 @@ export namespace Inject {
         return new _Map(src, transform)
     }
 
-    class From<K extends DependencyKey> extends ComputedKey<Target<K>, K> {
+    export abstract class From<K extends DependencyKey> extends ComputedKey<Target<K>, K> {
         init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer<Target<K>> {
             return deps
         }
     }
 
-    export function from<K extends DependencyKey>(src: K) {
-        return new From(src)
+    class _From<K extends DependencyKey> extends From<K> { }
+
+    export function from<K extends DependencyKey>(src: K): From<K> {
+        return new _From(src)
     }
 
     export function construct<

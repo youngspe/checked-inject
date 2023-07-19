@@ -5,11 +5,11 @@ import { DependencyKey, DepsOf, Target, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
 import { Initializer as _Initializer } from './_internal'
 
-const _computedKeySymbol = Symbol()
+declare const _computedKeySymbol: unique symbol
 
-/** @internal */
+/** @ignore */
 export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
-    /** @internal */
+    /** @ignore */
     readonly [_computedKeySymbol]: readonly [T, D, Sync] | null
 }
 
@@ -23,8 +23,8 @@ export abstract class ComputedKey<
     P extends Container.Graph = never,
     Sync extends Dependency = IsSyncDepsOf<K>,
 > extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
-    /** @internal */
-    readonly [_computedKeySymbol]: readonly [T, D, Sync] | null = null
+    /** @ignore */
+    readonly [_computedKeySymbol]!: readonly [T, D, Sync] | null
     /** This key determines the dependencies that will be passed to `this.init()`. */
     readonly inner: K
 
@@ -37,9 +37,8 @@ export abstract class ComputedKey<
     abstract init(deps: ComputedKey.Initializer<Target<K, P>> | InjectError): ComputedKey.Initializer<T> | InjectError
 }
 
-/** @internal */
 export namespace ComputedKey {
-    /** @internal */
+    /** @ignore */
     export interface Any<out T = any> extends ComputedKey<T, any, any, any> { }
     export import Initializer = _Initializer
 }

@@ -12,12 +12,12 @@ interface OnlyObject<out T = unknown> {
 }
 interface OnlyObjectKey extends OnlyObject<DependencyKey> { }
 
-/** @internal An object representing a structured set of type keys to produce type `T`. */
+/** @ignore An object representing a structured set of type keys to produce type `T`. */
 export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> = T extends OnlyObject ? OnlyObjectKey & {
     readonly [K in keyof T]: DependencyKey.Of<T[K], D, Sync>
 } : never
 
-/** @internal An array representing a structured set of type keys to produce type `T`. */
+/** @ignore An array representing a structured set of type keys to produce type `T`. */
 export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
     T extends [] ? [] :
@@ -26,11 +26,11 @@ export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     } :
     never
 
-/** @internal A structured set of type keys to produce type `T`. */
+/** @ignore A structured set of type keys to produce type `T`. */
 export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | ObjectKey<T, D, Sync>
     | ArrayKey<T, D, Sync>
-/** @internal */
+/** @ignore */
 export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
     | BaseTypeKey<T>
     | HasComputedKeySymbol<T, D, Sync>
@@ -98,18 +98,18 @@ export type Target<K extends DependencyKey, G extends Container.Graph = never> =
     [K] extends [infer _] ? _Target<K, G> : _Target<K, G>
 
 
-/** @internal */
+/** @ignore */
 export abstract class UnableToResolve<in out K> {
     private _k!: K
     constructor(_: never) { }
 }
 
-/** @internal */
+/** @ignore */
 export abstract class UnableToResolveIsSync<in out K> {
     private _s!: K
 }
 
-/** @internal */
+/** @ignore */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
@@ -119,7 +119,7 @@ export type DepsOf<K extends DependencyKey> =
     K extends OnlyObject<infer X extends DependencyKey> ? DepsOf<X> :
     UnableToResolve<K>
 
-/** @internal */
+/** @ignore */
 export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope ? UnableToResolveIsSync<K> :
     K extends BaseTypeKey | InjectableClass ? IsSync<K> :
