@@ -1,5 +1,5 @@
 {
-  "name": "structured-injection",
+  "name": "checked-inject",
   "version": "0.1.0",
   "description": "",
   "main": "dist/lib/index.js",
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/youngspe/structured-injection.git"
+    "url": "git+https://github.com/youngspe/checked-inject.git"
   },
   "author": "spencerwyoung@outlook.com",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/youngspe/structured-injection/issues"
+    "url": "https://github.com/youngspe/checked-inject/issues"
   },
-  "homepage": "https://github.com/youngspe/structured-injection#readme",
+  "homepage": "https://github.com/youngspe/checked-inject#readme",
   "devDependencies": {
     "@types/jest": "^29.5.2",
     "jest": "^29.5.0",

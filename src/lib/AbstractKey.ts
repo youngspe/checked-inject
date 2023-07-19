@@ -19,7 +19,7 @@ export abstract class AbstractKey {
     /**
      * Requests a function returning this key's output type.
      *
-     * @see {@link Inject.provide}
+     * @see {@link Inject.provider}
      * @group DependencyKey Operators
      */
     Provider<Th extends DependencyKey>(this: Th): Inject.GetProvider<Th> {

@@ -60,7 +60,7 @@ type Opt<T> = T | []
 type ValueOrPromise<T> = T | Promise<T>
 
 /**
- * The dependency injection container for `structured-injection`.
+ * The dependency injection container for `checked-inject`.
  *
  * @group Injection
  * @category Container
