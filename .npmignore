@@ -1,0 +1,6 @@
+/docs
+.vscode
+/node_modules
+tsconfig.json
+/src
+jest.config.js
