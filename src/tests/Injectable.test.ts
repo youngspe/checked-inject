@@ -1,4 +1,4 @@
-import { Inject, InjectableClass, Module, TypeKey } from "../lib";
+import { Inject, Injectable, Module, TypeKey } from "../lib";
 import { sleep } from "./utils";
 
 const Keys = {
@@ -6,9 +6,9 @@ const Keys = {
     UserId: class extends TypeKey<string>() { static readonly keyTag = Symbol() },
 } as const
 
-describe(InjectableClass, () => {
-    test('InjectableClass() subclass operators using default', async () => {
-        class User extends InjectableClass() {
+describe(Injectable, () => {
+    test('Injectable subclass operators using default', async () => {
+        class User extends Injectable {
             name: string;
             id: string;
             constructor(name: string, id: string) {
@@ -34,8 +34,8 @@ describe(InjectableClass, () => {
         expect(c).toEqual('alice')
     })
 
-    test('InjectableClass() subclass operators using provide', async () => {
-        class User extends InjectableClass() {
+    test('Injectable subclass operators using provide', async () => {
+        class User extends Injectable {
             name: string;
             id: string;
             constructor(name: string, id: string) {

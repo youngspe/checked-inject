@@ -30,6 +30,10 @@ export interface BaseTypeKey<out T = any, Def extends HasComputedKeySymbol<T> = 
     readonly defaultInit?: Def
 }
 
+/**
+ * @group Dependencies
+ * @category TypeKey
+ */
 export interface TypeKey<out T = any, Def extends ComputedKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
     readonly keyTag: symbol
 }
@@ -66,6 +70,10 @@ export function TypeKey<
     T = Def extends HasComputedKeySymbol<infer _T> ? _T : never,
 >(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
 
+/**
+ * @group Dependencies
+ * @category TypeKey
+ */
 export function TypeKey<
     Def extends HasComputedKeySymbol<T>,
     T,
@@ -81,6 +89,10 @@ export function TypeKey<
     }, AbstractKey)
 }
 
+/**
+ * @group Dependencies
+ * @category TypeKey
+ */
 export namespace TypeKey {
     export interface Options<T, Def extends HasComputedKeySymbol<T>> {
         of?: ClassLike<T>
@@ -102,6 +114,10 @@ export namespace TypeKey {
 
 /** Convenience for a TypeKey that specifically resolves to a a function that, given `Args`, returns `T`. */
 
+/**
+ * @group Dependencies
+ * @category TypeKey
+ */
 export interface FactoryKey<Args extends any[], T> extends TypeKey<(...args: Args) => T> { }
 
 export function FactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...args: Args) => T, never>
@@ -112,6 +128,10 @@ export function FactoryKey<
     K extends DependencyKey,
 >(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>>
 
+/**
+ * @group Dependencies
+ * @category TypeKey
+ */
 export function FactoryKey<
     T,
     Args extends any[],

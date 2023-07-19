@@ -104,12 +104,24 @@ class ListModule<P extends ProvideGraph> extends BaseModule<P> {
     }
 }
 
+/**
+ * @group Injection
+ * @category Module
+ */
 export interface Module<P extends ProvideGraph = any> extends BaseModule<P> { }
 
+/**
+ * @group Injection
+ * @category Module
+ */
 export function Module<M extends Module.Item[]>(...m: M): Module<Module.Provides<M>> {
     return new ListModule(m)
 }
 
+/**
+ * @group Injection
+ * @category Module
+ */
 export namespace Module {
     /** Implementation of a module that performs operations on a given `Container`. */
     export interface FunctionItem<P extends FlatGraph = any> {

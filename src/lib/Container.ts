@@ -59,7 +59,12 @@ const _depsTag = Symbol()
 type Opt<T> = T | []
 type ValueOrPromise<T> = T | Promise<T>
 
-/** The dependency injection container for `structured-injection`. */
+/**
+ * The dependency injection container for `structured-injection`.
+ *
+ * @group Injection
+ * @category Container
+ */
 export class Container<P extends Container.Graph> {
     /** @internal */
     [unresolved]!: ['missing dependencies:']
@@ -791,6 +796,10 @@ export class Container<P extends Container.Graph> {
     }
 }
 
+/**
+ * @group Injection
+ * @category Container
+ */
 export namespace Container {
     /** Key used to request an instance of {@link Container}. This is automatically provided to each container. */
     export class Key extends TypeKey<Container<Graph.Empty>>({ name: Container.name }) { static readonly keyTag = Symbol() }

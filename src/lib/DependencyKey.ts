@@ -85,11 +85,17 @@ type ContainerTransform<T, P extends Container.Graph> =
         T
     ) : T
 
-type _Target<K extends DependencyKey, P extends Container.Graph = never> = ContainerTransform<Actual<K>, P>
+type _Target<K extends DependencyKey, G extends Container.Graph = never> = ContainerTransform<Actual<K>, G>
 
-export type Target<K extends DependencyKey, P extends Container.Graph = never> =
+/**
+ * The type that {@link K} resolves to.
+ *
+ * @template G - The {@link Container.Graph} of the {@link Container} resolving {@link K}
+ * @group Injection
+ */
+export type Target<K extends DependencyKey, G extends Container.Graph = never> =
     // This conditional prevents Target from expanding to ContainerTransform in docs
-    [K] extends [infer _] ? _Target<K, P> : _Target<K, P>
+    [K] extends [infer _] ? _Target<K, G> : _Target<K, G>
 
 
 /** @internal */
@@ -123,6 +129,9 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
     K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> :
     UnableToResolveIsSync<K>
 
+/**
+ * @group Dependencies
+ */
 export type DependencyKey =
     | OnlyObject<DependencyKey>
     | DependencyKey[]
@@ -131,6 +140,9 @@ export type DependencyKey =
     | PrivateConstruct
     | null | undefined | void
 
+/**
+ * @group Dependencies
+ */
 export namespace DependencyKey {
     /** A dependency key that, when requested, resolves to a value of type `T`. */
     export type Of<T, D extends Dependency = any, Sync extends Dependency = any> =

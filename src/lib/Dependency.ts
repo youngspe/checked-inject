@@ -22,6 +22,9 @@ export abstract class NotSync<out K extends BaseTypeKey<any> | InjectableClass<a
 /** @internal */
 export type RequireSync<D extends Dependency> = D extends BaseTypeKey | InjectableClass ? IsSync<D> : never
 
+/**
+ * @group Dependencies
+ */
 export type Dependency =
     | Scope
     | HasTypeKeySymbol<any>

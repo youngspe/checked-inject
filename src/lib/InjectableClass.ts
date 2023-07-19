@@ -10,26 +10,33 @@ import { AbstractKey } from './AbstractKey'
  * @example
  *  ```
  *  class MyClass1 {
- *      constructor(x: number, y: string) {}
- *      static inject = Inject.bindConstructor(this, NumberKey, StringKey)
+ *    constructor(x: number, y: string) {}
+ *    static inject = Inject.construct(this, NumberKey, StringKey)
  *  }
  *
  *  class MyClass2 {
- *      static inject: Inject.Binding<MyClass2> = () => Inject.bindFrom(MyClass3)
+ *    static inject = Inject.construct(MyClass3, NumberKey, StringKey, BooleanKey)
  *  }
  *
  *  class MyClass3 extends MyClass2 {
- *      constructor(x: string, y: string) {
- *      }
- *      static inject = Inject.bindWith({
- *          x: MumberKey,
- *          y: StringKey,
- *      }, ({ x, y }) => new MyClass3(x.toString(), y))
+ *    constructor(x: number, y: string, z: boolean) {
+ *      super()
+ *    }
  *  }
  *  ```
+ *
+ * @group Dependencies
+ * @category InjectableClass
  */
 export interface InjectableClass<T = any> extends Class<T> {
+    /**
+     * A {@link Scope} or {@link ScopeList} that, if provided, specifies the scope in which an
+     * instance of this class will be resolved and stored.
+     */
     readonly scope?: ScopeList
+    /**
+     * A {@link ComputedKey} that, if provided, specifies how to resolve this class if no provider was supplied.
+     */
     readonly inject?: HasComputedKeySymbol<T> | (() => HasComputedKeySymbol<T>)
 }
 
@@ -41,9 +48,17 @@ export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependen
     readonly inject: HasComputedKeySymbol<T, D, Sync> | (() => HasComputedKeySymbol<T, D, Sync>)
 }
 
-export function InjectableClass<T = any>() {
-    return asMixin(class Injectable {
-        readonly scope?: ScopeList
-        readonly inject?: HasComputedKeySymbol<T> | (() => HasComputedKeySymbol<T>)
-    }, AbstractKey)
+abstract class _Injectable { }
+
+/**
+ * A base class that contains static {@link DependencyKey} operators.
+ *
+ * @group Dependencies
+ * @category InjectableClass
+ */
+export abstract class Injectable<T = any> extends asMixin(_Injectable, AbstractKey) {
+    /** {@inheritDoc InjectableClass#scope} */
+    readonly scope?: ScopeList
+    /** {@inheritDoc InjectableClass#inject} */
+    readonly inject?: HasComputedKeySymbol<T> | (() => HasComputedKeySymbol<T>)
 }
