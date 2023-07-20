@@ -130,6 +130,82 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
     UnableToResolveIsSync<K>
 
 /**
+ * Specifies which dependencies to request from a {@link Container}.
+ *
+ * ## Target Types
+ *
+ * <table>
+ * <tr><th>Kind</th><th>Key</th><th> Target Type </th></tr>
+ * <tr>
+ * <td>
+ *
+ * {@link TypeKey}\<string>
+ *
+ * </td>
+ * <td>
+ *
+ * `NameKey` or `IdKey`
+ *
+ * </td>
+ * <td>string</td>
+ * </tr>
+ * <tr>
+ * <td>
+ *
+ * {@link InjectableClass}\<User>
+ *
+ * </td>
+ * <td>
+ *
+ * `User`
+ *
+ * </td>
+ * <td>User</td>
+ * </tr>
+ * <tr>
+ * <td>Object key</td>
+ * <td>
+ *
+ * ```ts
+ * {
+ *   name: NameKey,
+ *   id: IdKey,
+ *   user: User,
+ * }
+ * ```
+ *
+ * </td>
+ * <td>
+ *
+ * ```ts
+ * {
+ *   name: string,
+ *   id: string,
+ *   user: User,
+ * }
+ * ```
+ *
+ * </td>
+ * </tr>
+ * <tr>
+ * <td>Array key</td>
+ * <td>
+ *
+ * ```ts
+ * [NameKey, IdKey, User]
+ * ```
+ *
+ * </td>
+ * <td>
+ *
+ * ```ts
+ * [string, string, User]
+ * ```
+ *
+ * </td>
+ * </tr>
+ * <table>
+ *
  * @group Dependencies
  */
 export type DependencyKey =

@@ -440,7 +440,7 @@ export class Container<P extends Container.Graph> {
      * Specifies how to asynchronously resolve the target type of the given key or class.
      * The signature is the same as {@link provide}, except that a {@link Promise} to the target type can be provided.
      * The provided type cannot be directly requested through {@link request}.
-     * It can, however be requested through {@link requestAsync} or by using {@link TypeKey#Async | key.Async()}.
+     * It can, however be requested through {@link requestAsync} or by using {@link TypeKey.Async | key.Async()}.
      *
      * @example
      *
@@ -831,7 +831,7 @@ export namespace Container {
     }
 
     /**
-     * The {@link Graph} of a container returned by {@link Container#provide}
+     * The {@link Graph} of a container returned by {@link Container.provide}
     */
     export type DefaultGraph<S extends Scope = never> = FlatGraph<
         | DepPair<typeof Singleton, never>
@@ -848,8 +848,8 @@ export namespace Container {
         readonly [_depsTag]: ((d: P) => void) | null
 
         /**
-         * {@inheritDoc Container#provide}
-         * @see {@link Container#provide}
+         * {@inheritDoc Container.provide}
+         * @see {@link Container.provide}
          */
         provide<
             K extends TypeKey<any> | InjectableClass<any>,
@@ -873,8 +873,8 @@ export namespace Container {
         >>
 
         /**
-         * {@inheritDoc Container#provideAsync}
-         * @see {@link Container#provideAsync}
+         * {@inheritDoc Container.provideAsync}
+         * @see {@link Container.provideAsync}
          */
         provideAsync<
             K extends TypeKey<any> | InjectableClass<any>,
@@ -893,24 +893,24 @@ export namespace Container {
         ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
 
         /**
-         * {@inheritDoc Container#provideInstance}
-         * @see {@link Container#provideInstance}
+         * {@inheritDoc Container.provideInstance}
+         * @see {@link Container.provideInstance}
          */
         provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Builder<
             Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
         >
 
         /**
-         * {@inheritDoc Container#addScope}
-         * @see {@link Container#addScope}
+         * {@inheritDoc Container.addScope}
+         * @see {@link Container.addScope}
          */
         addScope<S extends Scope>(...scope: S[]): Builder<
             Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
         >
 
         /**
-         * {@inheritDoc Container#apply}
-         * @see {@link Container#apply}
+         * {@inheritDoc Container.apply}
+         * @see {@link Container.apply}
          */
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
     }

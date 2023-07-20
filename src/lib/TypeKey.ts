@@ -1,5 +1,5 @@
 import { Inject } from './Inject'
-import { ComputedKey, HasComputedKeySymbol } from './ComputedKey'
+import { ComputedKey } from './ComputedKey'
 import { AbstractKey } from './AbstractKey'
 import { ScopeList } from './Scope'
 import { DependencyKey, Target } from './DependencyKey'
@@ -19,22 +19,51 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
 
-export interface BaseTypeKey<out T = any, Def extends HasComputedKeySymbol<T> = any> extends HasTypeKeySymbol<T> {
+export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends HasTypeKeySymbol<T> {
     /** @ignore */
     readonly keyTag: symbol | typeof MISSING_KEY_TAG
+    /** The {@link Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
     readonly scope?: ScopeList
+    /** The name of the class object that implements `TypeKey`. */
     readonly name: string
+    /** The name that will be displayed in exception messages. */
     readonly fullName: string
+    /** A class or function returning the target value of this `TypeKey`. */
     readonly of?: ClassLike<T>
+    /** @ignore */
     readonly inject: null
+    /** @ignore */
     readonly defaultInit?: Def
 }
 
 /**
+ * A key for a custom dependency not bound to a specific class.
+ *
+ * @example
+ *
+ * ```ts
+ * // These TypeKeys both resolve to `string` but are separate from each other:
+ * class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+ * class IdKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+ *
+ * class User { constructor(name: string, id: string) /* ... *\/ }
+ *
+ * const ct = Container.create()
+ *   .provideInstance(NameKey, 'Alice')
+ *   .provideInstance(IdKey, '123')
+ *   .provide(User, {
+ *     name: NameKey,
+ *     id: IdKey,
+ *   }, ({ name, id }) => new User(name, id))
+ *
+ * const user = ct.request(User)
+ * ```
+ *
  * @group Dependencies
  * @category TypeKey
  */
-export interface TypeKey<out T = any, Def extends ComputedKey.Any<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
+export interface TypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
+    /** A unique symbol distinguishing the type of this `TypeKey` from others. */
     readonly keyTag: symbol
 }
 
@@ -46,7 +75,7 @@ export interface BaseTypeKeyWithDefault<
     out T,
     D extends Dependency,
     Sync extends Dependency,
-> extends BaseTypeKey<T, HasComputedKeySymbol<T, D, Sync>> { }
+> extends BaseTypeKey<T, ComputedKey<T, any, D, any, Sync>> { }
 
 /** @ignore */
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
@@ -58,25 +87,92 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
 const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
 
 /** @ignore */
-export interface TypeKeyClass<out T, Def extends HasComputedKeySymbol<T>> extends
+export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
     AbstractKey,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }
 
-export function TypeKey<T>(): TypeKeyClass<T, never>
-export function TypeKey<T>(options: TypeKey.Options<T, never>): TypeKeyClass<T, never>
-
-export function TypeKey<
-    Def extends HasComputedKeySymbol<T>,
-    T = Def extends HasComputedKeySymbol<infer _T> ? _T : never,
->(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
-
 /**
+ * Generates a base class for a class object that extends `TypeKey<T>`.
+ * Classes that extend the returned base class should have a
+ * `static readonly keyTag = Symbol()` property to ensure uniqueness.
+ *
+ * @return A base class that can be extended to produce a `TypeKey<T>` class object.
+ *
+ * @example
+ *
+ * ```ts
+ * class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+ * ```
+ *
+ * @example with {@link Scope}:
+ *
+ * ```ts
+ * class NameKey extends TypeKey<string>() {
+ *   static readonly keyTag = Symbol()
+ *   static scope = Singleton
+ * }
+ * ```
+ *
+ * @example with default instance:
+ *
+ * ```ts
+ * class NameKey extends TypeKey({ default: Inject.value('Alice') }) {
+ *   static readonly keyTag = Symbol()
+ * }
+ * ```
+ *
+ * @example with custom default:
+ *
+ * ```ts
+ * class NameKey extends TypeKey({
+ *   default: Inject.map(DataSource, ds => ds.getName()),
+ * }) {
+ *   static readonly keyTag = Symbol()
+ * }
+ * ```
+ *
+ * @example using the `TypeKey`:
+ *
+ * ### Provide
+ * ```ts
+ * const ct = Container.create().provide(NameKey, () => 'Alice')
+ * ```
+ * ### Request
+ * ```ts
+ * const name: string = ct.request(NameKey)
+ * ```
+ *
+ * ### Use as dependency
+ *
+ * ```ts
+ * const UserModule = Module(ct => ct
+ *   .provide(User, { name: NameKey }, ({ name }) => new User(name))
+ * )
+ * ```
+ *
+ * ### Use key operators
+ *
+ * ```ts
+ * const UserModule = Module(ct => ct
+ *   .provide(User, { name: NameKey.Lazy() }, ({ name }) => new User(name()))
+ * )
+ * ```
+ *
  * @group Dependencies
  * @category TypeKey
  */
+export function TypeKey<T>(): TypeKeyClass<T, never>
+
+export function TypeKey<T>(options: TypeKey.Options<T, never>): TypeKeyClass<T, never>
+
 export function TypeKey<
-    Def extends HasComputedKeySymbol<T>,
+    Def extends ComputedKey.Of<T>,
+    T = Def extends ComputedKey.Of<infer _T> ? _T : never,
+>(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
+
+export function TypeKey<
+    Def extends ComputedKey.Of<T>,
     T,
 >({ default: defaultInit, of, name = of?.name }: TypeKey.Options<T, Def> = {} as any): TypeKeyClass<T, Def> {
     return asMixin(class _TypeKey {
@@ -95,19 +191,19 @@ export function TypeKey<
  * @category TypeKey
  */
 export namespace TypeKey {
-    export interface Options<T, Def extends HasComputedKeySymbol<T>> {
+    export interface Options<T, Def extends ComputedKey.Of<T>> {
+        /**
+         * A class or function. The name will be used to name this `TypeKey`
+         * and the return type can be used to infer the target type.
+         */
         of?: ClassLike<T>
+        /** A name for this TypeKey, largely for use in error messages. */
         name?: string
+        /** A {@link ComputedKey} providing a default value for this TypeKey if none is provided to the {@link Container}. */
         default?: Def
     }
 
-    export interface DefaultWithDeps<T, K extends DependencyKey> {
-        deps: K
-        init(deps: Target<K>): T
-    }
-    export interface DefaultWithInstance<T> { instance: T }
-    export interface DefaultFunction<T> { (): T }
-
+    /** @ignore */
     export function isTypeKey(target: any): target is BaseTypeKey<any> {
         return _typeKeySymbol in target
     }

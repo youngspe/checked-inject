@@ -39,6 +39,6 @@ export abstract class ComputedKey<
 
 export namespace ComputedKey {
     /** @ignore */
-    export interface Any<out T = any> extends ComputedKey<T, any, any, any> { }
+    export interface Of<out T = any> extends ComputedKey<T, any, any, any, any> { }
     export import Initializer = _Initializer
 }
