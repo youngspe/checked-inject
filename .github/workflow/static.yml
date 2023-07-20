@@ -29,10 +29,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: setup node
-        uses: actions/setup-node@v3
       - name: Checkout
         uses: actions/checkout@v3
+      - name: setup node
+        uses: actions/setup-node@v3
       - run: npm install
       - run: npm run doc
       - name: Setup Pages
@@ -40,7 +40,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
-          path: './docs'
+          path: "./docs"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v2
