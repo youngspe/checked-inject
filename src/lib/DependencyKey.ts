@@ -142,12 +142,17 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  * {@link TypeKey}\<string>
  *
  * </td>
+ * <td>NameKey</td>
+ * <td>string</td>
+ * </tr>
+ * <tr>
  * <td>
  *
- * `NameKey` or `IdKey`
+ * {@link TypeKey}\<number>
  *
  * </td>
- * <td>string</td>
+ * <td>IdKey </td>
+ * <td>number</td>
  * </tr>
  * <tr>
  * <td>
@@ -155,12 +160,35 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  * {@link InjectableClass}\<User>
  *
  * </td>
+ * <td>User</td>
+ * <td>User</td>
+ * </tr>
+ * <tr>
  * <td>
  *
- * `User`
+ * {@link ComputedKey}
  *
  * </td>
- * <td>User</td>
+ * <td>
+ *
+ * ```ts
+ * Inject.async(User).Lazy()
+ * ```
+ * or
+ * ```ts
+ * Inject.lazy(Inject.async(User))
+ * ```
+ * or (if `User` extends `Injectable`)
+ * ```ts
+ * User.Async().Lazy()
+ * ```
+ *
+ * </td>
+ * <td>
+ *
+ * `() => Promise<User>`
+ *
+ * </td>
  * </tr>
  * <tr>
  * <td>Object key</td>
@@ -169,7 +197,7 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  * ```ts
  * {
  *   name: NameKey,
- *   id: IdKey,
+ *   id: IdKey.Provider(),
  *   user: User,
  * }
  * ```
@@ -180,7 +208,7 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  * ```ts
  * {
  *   name: string,
- *   id: string,
+ *   id: () => number,
  *   user: User,
  * }
  * ```
@@ -192,14 +220,14 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  * <td>
  *
  * ```ts
- * [NameKey, IdKey, User]
+ * [NameKey, IdKey.Provider(), User]
  * ```
  *
  * </td>
  * <td>
  *
  * ```ts
- * [string, string, User]
+ * [string, () => number, User]
  * ```
  *
  * </td>
