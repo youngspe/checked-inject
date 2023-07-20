@@ -114,6 +114,7 @@
       "includeCategories": true,
       "includeGroups": true,
     },
+    "readme": "none",
     "sort": [
       "alphabetical",
     ],

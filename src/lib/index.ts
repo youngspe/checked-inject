@@ -1,3 +1,7 @@
+/**
+ * @packageDocumentation
+ */
+
 export { Container } from './Container'
 export { TypeKey, FactoryKey } from './TypeKey'
 export { Inject } from './Inject'
