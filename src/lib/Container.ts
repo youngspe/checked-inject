@@ -214,13 +214,16 @@ export class Container<P extends Container.Graph> {
 
     private _getClassTypKey<T>(cls: InjectableClass<T>): TypeKey<T> {
         const _cls: typeof cls & { [_classTypeKey]?: TypeKey<T> } = cls
-        return _cls[_classTypeKey] ??= class _X extends TypeKey({
-            of: _cls,
-            default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
-        }) {
-            static readonly keyTag: symbol = Symbol()
-            static readonly scope = _cls.scope
+        if (!Object.getOwnPropertySymbols(_cls).includes(_classTypeKey)) {
+            _cls[_classTypeKey] = class _X extends TypeKey({
+                of: _cls,
+                default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
+            }) {
+                static readonly keyTag: symbol = Symbol()
+                static readonly scope = _cls.scope
+            }
         }
+        return _cls[_classTypeKey]!
     }
 
     private _getClassProvider<T>(cls: InjectableClass<T>): Initializer<T> | InjectError {
