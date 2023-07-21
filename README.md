@@ -61,7 +61,7 @@ class ApiConfig {
   apiKey: string
 
   // All root containers are automatically marked with 'Singleton', so a single
-  // instance of `ApiConfig` will be created and reused within the container
+  // instance of 'ApiConfig' will be created and reused within the container
   // it's provided to.
   static scope: Singleton
 }
@@ -103,7 +103,25 @@ const MyModule = Module(ct => ct
 
 ### TypeKey
 
-WIP
+A [TypeKey](https://youngspe.github.io/checked-inject/interfaces/TypeKey-1.html)
+specifies a resource not tied to a specific class object--like a named dependency.
+
+To ensure each TypeKey has its own distinct type, a `TypeKey<T>` is declared as a class extending `TypeKey<T>()`:
+
+```ts
+class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+class IdKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
+
+// You can set a 'ComputedKey' like `Inject.map(...)' as a default provider.
+// If 'CurrentUser' is not explicitly provided to a container, the default
+// provider will be used to resolve it.
+class CurrentUser extends TypeKey({
+  default: Inject.map({
+    name: NameKey,
+    id: IdKey,
+  }, ({ name, id }) => new User(name, id)),
+}) { static readonly keyTag = Symbol() }
+```
 
 ### Target Types
 
