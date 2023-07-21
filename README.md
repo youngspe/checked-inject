@@ -106,7 +106,7 @@ const MyModule = Module(ct => ct
 A [TypeKey](https://youngspe.github.io/checked-inject/interfaces/TypeKey-1.html)
 specifies a resource not tied to a specific class object--like a named dependency.
 
-To ensure each TypeKey has its own distinct type, a `TypeKey<T>` is declared as a class extending `TypeKey<T>()`:
+To ensure each TypeKey has its own distinct type, a `TypeKey<T>` is declared as a class extending `TypeKey<T>()` and has a `static readonly keyTag: unique symbol` property:
 
 ```ts
 class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
@@ -116,14 +116,91 @@ class IdKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
 // If 'CurrentUser' is not explicitly provided to a container, the default
 // provider will be used to resolve it.
 class CurrentUser extends TypeKey({
-  default: Inject.map({
-    name: NameKey,
-    id: IdKey,
-  }, ({ name, id }) => new User(name, id)),
+  default: Inject.map([NameKey, IdKey], ([name, id]) => new User(name, id)),
 }) { static readonly keyTag = Symbol() }
 ```
 
+### Structured Keys:
+
+DependencyKeys can also be structured into arrays or objects
+of the form `DependencyKey[]` or `{ [k: string]: DependencyKey }` like so:
+
+```ts
+const [name, id, user] = container.request([NameKey, IdKey.Provider(), User])
+```
+
+```ts
+const { name, id, user } = container.request({
+  name: NameKey,
+  id: IdKey.Provider(),
+  user: User,
+})
+```
+
+If you want you can even nest structured keys:
+
+```ts
+const { userInfo: { name, id } }  = container.request({
+  userInfo: { name: NameKey, id: IdKey },
+})
+```
+
+### ComputedKey
+
+A [ComputedKey](https://youngspe.github.io/checked-inject/classes/ComputedKey.html)
+transforms a dependency into another type.
+Implementations are found in the
+[Inject](https://youngspe.github.io/checked-inject/modules/Inject.html)
+namespace.
+
+These methods can operate over any DependencyKey, even structured keys:
+
+```ts
+const f = container.request(Inject.provider({
+  name: NameKey,
+  id: IdKey,
+}))
+
+const { name, id } = f()
+```
+
+#### Lazy, Provider
+
+[`Inject.lazy(src)`](https://youngspe.github.io/checked-inject/functions/Inject.lazy.html)
+and
+[`Inject.provider(src)`](https://youngspe.github.io/checked-inject/functions/Inject.provider.html)
+both resolve to a function returning the target type of `src`.
+`lazy` caches the result after the first call, whereas `provider` resolves
+the resource every time it's called.
+TypeKeys, ComputedKeys, and class objects that
+extends Injectable have analogous methods called
+[`Lazy()`](https://youngspe.github.io/checked-inject/interfaces/TypeKey-1.html#Lazy)
+and
+[`Provider()`](https://youngspe.github.io/checked-inject/interfaces/TypeKey-1.html#Provider).
+
+Because the resulting function returns synchronously,
+these methods can only be used on dependencies that can be resolved synchronously.
+To resolve asynchronously, use `Inject.async(MyKey).Lazy()/Provider()`
+or (if MyKey is a TypeKey or class object that extends Injectable)
+`MyKey.Async().Lazy()/Provider()`.
+
+This will yield a value of type `() => Promise<Target<MyKey>>`.
+
+#### Async
+
+[`Inject.async(src)`](https://youngspe.github.io/checked-inject/functions/Inject.async.html)
+resolves the given dependency as a `Promise`.
+This allows you to request dependencies that cannot be resolved synchronously
+without having to use `requestAsync` or `injectAsync`.
+Instead the dependent resource can await the promises independently.
+
+
 ### Target Types
+
+[Target](https://youngspe.github.io/checked-inject/types/Target.html)\<K>,
+where K extends DependencyKey, indicates what type the K resolves to when requested
+from a container:
+
 
 <table>
 <tr><th>Kind</th><th>Key</th><th> Target Type</th></tr>
