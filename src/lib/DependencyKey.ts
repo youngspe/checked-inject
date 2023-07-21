@@ -232,7 +232,7 @@ export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] 
  *
  * </td>
  * </tr>
- * <table>
+ * </table>
  *
  * @group Dependencies
  */
