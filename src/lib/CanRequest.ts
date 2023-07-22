@@ -14,7 +14,7 @@ type UnresolvedKeys<
 export const unresolved = Symbol()
 
 interface RequestFailed<K> {
-    [unresolved]: [(K extends any ? [K] : never)[0]]
+    [unresolved]: (K extends any ? [K] : never)[0]
 }
 
 export type CanRequest<

@@ -26,7 +26,8 @@ type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = Target<K, M
 
 /** An object used to provide definitions to a `Container` */
 export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {
-    readonly [unresolved]?: ['missing dependencies:']
+    /** @ignore */
+    readonly [unresolved]!: [null]
 
     abstract applyTo(ct: Container.Builder<any>): Container<P>
 

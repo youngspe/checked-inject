@@ -56,7 +56,6 @@ type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends 
         & ([Scp] extends [never] ? unknown : WithScope<Scp>)
     ) : never
 
-
 const _classTypeKey = Symbol()
 const _depsTag = Symbol()
 type Opt<T> = T | []
@@ -70,7 +69,7 @@ type ValueOrPromise<T> = T | Promise<T>
  */
 export class Container<P extends Container.Graph> {
     /** @ignore */
-    [unresolved]!: ['missing dependencies:']
+    [unresolved]!: void
     private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
         [Container.Key, { value: { instance: this } }]
     ])
