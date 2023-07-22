@@ -34,10 +34,13 @@ interface Entry<T, P extends ProvideGraph, K extends DependencyKey> {
     | EntryPromise<T>
 }
 
-type CombinedScope<K, S extends Scope> = Exclude<
+type ExcludeUnspecifiedScope<S> = S extends any ? (
+    Scope extends S ? never : S
+) : never
+
+type CombinedScope<K, S extends Scope> = ExcludeUnspecifiedScope<
     | S
-    | (K extends { scope: infer A extends Scope } ? A : never),
-    Scope
+    | (K extends { scope: infer A extends Scope } ? A : never)
 >
 
 type PairForProvide<K extends Dependency, D extends Dependency, S extends Scope> =

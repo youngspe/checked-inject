@@ -101,5 +101,6 @@ type ValidateDep<D extends Dependency> =
         NotDistinct<D>
     ) :
     D
+
 type PairsOf<P extends ProvideGraph> = P['pairs']
 type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
