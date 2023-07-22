@@ -2,8 +2,8 @@ import { Inject, Injectable, Module, TypeKey } from "../lib";
 import { sleep } from "./utils";
 
 const Keys = {
-    UserName: class extends TypeKey<string>() { static readonly keyTag = Symbol() },
-    UserId: class extends TypeKey<string>() { static readonly keyTag = Symbol() },
+    UserName: class extends TypeKey<string>() { private _: any },
+    UserId: class extends TypeKey<string>() { private _: any },
 } as const
 
 describe(Injectable, () => {

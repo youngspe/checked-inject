@@ -2,8 +2,8 @@ import { Inject, Module, TypeKey } from '../lib'
 import { sleep } from './utils'
 
 namespace Keys {
-    export class UserName extends TypeKey<string>() { static readonly keyTag = Symbol() }
-    export class UserId extends TypeKey<string>() { static readonly keyTag = Symbol() }
+    export class UserName extends TypeKey<string>() { private _: any }
+    export class UserId extends TypeKey<string>() { private _: any }
 }
 
 class User {
@@ -43,7 +43,7 @@ describe(Module, () => {
             user: User,
         }
 
-        class AppKey extends TypeKey<App>() { static readonly keyTag = Symbol() }
+        class AppKey extends TypeKey<App>() { private _: any }
 
         const AppModule = Module(ServiceModule, UserModule, ct => ct
             .provide(AppKey, { FooService, BarService, User }, deps => ({
@@ -78,7 +78,7 @@ describe(Module, () => {
             user: User,
         }
 
-        class AppKey extends TypeKey<App>() { static readonly keyTag = Symbol() }
+        class AppKey extends TypeKey<App>() { private _: any }
 
         const AppModule = Module(ServiceModule, UserModule, ct => ct
             .provide(AppKey, { FooService, BarService, User }, deps => ({

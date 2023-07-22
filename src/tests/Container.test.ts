@@ -1,9 +1,9 @@
 import { Container, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
 
-class NumberKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
-class StringKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
-class ArrayKey extends TypeKey<string[]>() { static readonly keyTag = Symbol() }
-class BooleanKey extends TypeKey<boolean>() { static readonly keyTag = Symbol() }
+class NumberKey extends TypeKey<number>() { private _: any }
+class StringKey extends TypeKey<string>() { private _: any }
+class ArrayKey extends TypeKey<string[]>() { private _: any }
+class BooleanKey extends TypeKey<boolean>() { private _: any }
 
 describe(Container, () => {
     test('provide and request', () => {
@@ -134,7 +134,7 @@ describe(Container, () => {
     })
 
     test('singleton returns the same instance every time', () => {
-        class CustomKey extends TypeKey<{ num: number, str: string, bool: boolean }>() { static readonly keyTag = Symbol() }
+        class CustomKey extends TypeKey<{ num: number, str: string, bool: boolean }>() { private _: any }
 
         const target = Container.create()
             .provideInstance(NumberKey, 10)
@@ -161,7 +161,7 @@ describe(Container, () => {
     })
 
     test('dependencies are resolved from the appropriate scope', () => {
-        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
+        class MyScope extends Scope() { private _: any }
 
         const parent = Container.create()
             .provide(NumberKey, {}, () => 10)
@@ -202,10 +202,10 @@ describe(Container, () => {
 
     test('TypeKey.default is function', () => {
         // Non-singleton
-        class CustomKey1 extends TypeKey({ default: Inject.call(() => ({ a: 1 })) }) { static readonly keyTag = Symbol() }
+        class CustomKey1 extends TypeKey({ default: Inject.call(() => ({ a: 1 })) }) { private _: any }
         // Singleton
         class CustomKey2 extends TypeKey({ default: Inject.call(() => ({ b: 2 })) }) {
-            static readonly keyTag = Symbol()
+            private _: any
             static readonly scope = Singleton
         }
         const target = Container.create()
@@ -231,7 +231,7 @@ describe(Container, () => {
         // Non-singleton
         class CustomKey1 extends TypeKey({
             default: Inject.map({ num: NumberKey }, ({ num }) => ({ a: num })),
-        }) { static readonly keyTag = Symbol() }
+        }) { private _: any }
         // Singleton
         class CustomKey2 extends TypeKey({
             default: Inject.map({ str: StringKey }, ({ str }) => ({ b: str })),
@@ -263,7 +263,7 @@ describe(Container, () => {
 
     test('TypeKey.default is instance', () => {
         const instance = { a: 1 }
-        class CustomKey extends TypeKey({ default: Inject.value(instance) }) { static readonly keyTag = Symbol() }
+        class CustomKey extends TypeKey({ default: Inject.value(instance) }) { private _: any }
 
         const target = Container.create()
 
@@ -273,10 +273,10 @@ describe(Container, () => {
     })
 
     test('TypeKey.scope is respected when no scope is provided', () => {
-        class MyScope extends Scope() {  private _: any  }
+        class MyScope extends Scope() { private _: any }
         type Asdf = typeof MyScope extends Scope ? true : false
         class CustomKey extends TypeKey<{ a: number }>() {
-            static readonly keyTag = Symbol()
+            private _: any
             static readonly scope = MyScope
         }
 
@@ -315,9 +315,9 @@ describe(Container, () => {
     })
 
     test('Provided scope added to TypeKey.scope', () => {
-        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
+        class MyScope extends Scope() { private _: any }
         class CustomKey extends TypeKey<{ a: number }>() {
-            static readonly keyTag = Symbol()
+            private _: any
             static readonly scope = Singleton
         }
 
@@ -435,11 +435,11 @@ describe(Container, () => {
     })
 
     test('Inject.subcomponent', () => {
-        class UserScope extends Scope() { static readonly scopeTag = Symbol() }
+        class UserScope extends Scope() { private _: any }
         class Keys {
-            static UserId = class UserId extends TypeKey<string>() { static readonly keyTag = Symbol() }
-            static UserName = class UserName extends TypeKey<string>() { static readonly keyTag = Symbol() }
-            static UserInfo = class UserInfo extends TypeKey<{ userName: string, userId: string }>() { static readonly keyTag = Symbol() }
+            static UserId = class UserId extends TypeKey<string>() { private _: any }
+            static UserName = class UserName extends TypeKey<string>() { private _: any }
+            static UserInfo = class UserInfo extends TypeKey<{ userName: string, userId: string }>() { private _: any }
             static Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
                 .addScope(UserScope)
                 .provideInstance(this.UserName, userName)

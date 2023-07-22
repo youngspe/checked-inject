@@ -21,7 +21,7 @@ const _typeKeySymbol: unique symbol = Symbol()
 
 export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends HasTypeKeySymbol<T> {
     /** @ignore */
-    readonly keyTag: symbol | typeof MISSING_KEY_TAG
+    readonly keyTag?: symbol
     /** The {@link Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
     readonly scope?: ScopeList
     /** The name of the class object that implements `TypeKey`. */
@@ -43,8 +43,8 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> e
  *
  * ```ts
  * // These TypeKeys both resolve to `string` but are separate from each other:
- * class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
- * class IdKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+ * class NameKey extends TypeKey<string>() { private _: any }
+ * class IdKey extends TypeKey<string>() { private _: any }
  *
  * class User { constructor(name: string, id: string) /* ... *\/ }
  *
@@ -63,8 +63,8 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> e
  * @category TypeKey
  */
 export interface TypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
-    /** A unique symbol distinguishing the type of this `TypeKey` from others. */
-    readonly keyTag: symbol | typeof MISSING_KEY_TAG
+    /** @ignore */
+    readonly keyTag?: symbol
 }
 
 /** @ignore */
@@ -84,8 +84,6 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
     | BaseTypeKeyWithDefault<T, D, Sync>
     | ClassWithDefault<T, D, Sync>
 
-const MISSING_KEY_TAG = 'add `static readonly keyTag = Symbol()` to TypeKey implementation' as const
-
 /** @ignore */
 export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
     AbstractKey,
@@ -95,21 +93,21 @@ export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
 /**
  * Generates a base class for a class object that extends `TypeKey<T>`.
  * Classes that extend the returned base class should have a
- * `static readonly keyTag = Symbol()` property to ensure uniqueness.
+ * `private _: any` property to ensure uniqueness.
  *
  * @return A base class that can be extended to produce a `TypeKey<T>` class object.
  *
  * @example
  *
  * ```ts
- * class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
+ * class NameKey extends TypeKey<string>() { private _: any }
  * ```
  *
  * @example with {@link Scope}:
  *
  * ```ts
  * class NameKey extends TypeKey<string>() {
- *   static readonly keyTag = Symbol()
+ *   private _: any
  *   static scope = Singleton
  * }
  * ```
@@ -118,7 +116,7 @@ export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
  *
  * ```ts
  * class NameKey extends TypeKey({ default: Inject.value('Alice') }) {
- *   static readonly keyTag = Symbol()
+ *   private _: any
  * }
  * ```
  *
@@ -128,7 +126,7 @@ export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
  * class NameKey extends TypeKey({
  *   default: Inject.map(DataSource, ds => ds.getName()),
  * }) {
- *   static readonly keyTag = Symbol()
+ *   private _: any
  * }
  * ```
  *
@@ -177,7 +175,8 @@ export function TypeKey<
 >({ default: defaultInit, of, name = of?.name }: TypeKey.Options<T, Def> = {} as any): TypeKeyClass<T, Def> {
     return asMixin(class _TypeKey {
         static readonly [_typeKeySymbol]: TypeKeyClass<T, Def>[typeof _typeKeySymbol] = null
-        static readonly keyTag: symbol | typeof MISSING_KEY_TAG = MISSING_KEY_TAG
+        /** @ignore */
+        static readonly keyTag?: symbol
         static readonly of = of
         static readonly fullName = this.name + (name ? `(${name})` : '')
         static readonly defaultInit = defaultInit

@@ -106,18 +106,18 @@ const MyModule = Module(ct => ct
 A [TypeKey](https://youngspe.github.io/checked-inject/interfaces/TypeKey-1.html)
 specifies a resource not tied to a specific class object--like a named dependency.
 
-To ensure each TypeKey has its own distinct type, a `TypeKey<T>` is declared as a class extending `TypeKey<T>()` and has a `static readonly keyTag: unique symbol` property:
+To ensure each TypeKey has its own distinct type, a `TypeKey<T>` is declared as a class extending `TypeKey<T>()` with at least one private member:
 
 ```ts
-class NameKey extends TypeKey<string>() { static readonly keyTag = Symbol() }
-class IdKey extends TypeKey<number>() { static readonly keyTag = Symbol() }
+class NameKey extends TypeKey<string>() { private _: any }
+class IdKey extends TypeKey<number>() { private _: any }
 
 // You can set a 'ComputedKey' like `Inject.map(...)' as a default provider.
 // If 'CurrentUser' is not explicitly provided to a container, the default
 // provider will be used to resolve it.
 class CurrentUser extends TypeKey({
   default: Inject.map([NameKey, IdKey], ([name, id]) => new User(name, id)),
-}) { static readonly keyTag = Symbol() }
+}) { private _: any }
 ```
 
 ### Structured Keys:

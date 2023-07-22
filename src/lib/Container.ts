@@ -219,7 +219,6 @@ export class Container<P extends Container.Graph> {
                 of: _cls,
                 default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
             }) {
-                static readonly keyTag: symbol = Symbol()
                 static readonly scope = _cls.scope
             }
         }
@@ -805,7 +804,7 @@ export class Container<P extends Container.Graph> {
  */
 export namespace Container {
     /** Key used to request an instance of {@link Container}. This is automatically provided to each container. */
-    export class Key extends TypeKey<Container<Graph.Empty>>({ name: Container.name }) { static readonly keyTag = Symbol() }
+    export class Key extends TypeKey<Container<Graph.Empty>>({ name: Container.name }) { private _: any }
     /** @ignore */
     export const inject = Inject.from(Key)
 

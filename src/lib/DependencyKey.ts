@@ -1,6 +1,5 @@
 import { HasComputedKeySymbol } from './ComputedKey'
 import { Container } from './Container'
-import { Scope } from './Scope'
 import { PrivateConstruct } from './_internal'
 import { BaseTypeKey, HasTypeKeySymbol } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
@@ -117,7 +116,7 @@ export abstract class NotDistinct<in out K> {
 /** @ignore */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
-    K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :
+    K extends BaseTypeKey<any> | InjectableClass<any> ? K :
     K extends DependencyKey.Of<infer _T, never> ? never :
     K extends DependencyKey.Of<infer _T, infer D> ? D :
     K extends readonly (infer X extends DependencyKey)[] ? DepsOf<X> :
@@ -125,8 +124,8 @@ export type DepsOf<K extends DependencyKey> =
     UnableToResolve<K>
 
 /** @ignore */
-export type IsSyncDepsOf<K extends DependencyKey> = [DependencyKey] extends [K] ? UnableToResolve<K> :
-    K extends Scope ? UnableToResolveIsSync<K> :
+export type IsSyncDepsOf<K extends DependencyKey> =
+    [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends BaseTypeKey | InjectableClass ? IsSync<K> :
     K extends DependencyKey.Of<infer _T, any, never> ? never :
     K extends DependencyKey.Of<infer _T, any, infer D> ? D :

@@ -1,7 +1,7 @@
 
 /** Represents a scope for which certain dependencies are provided. */
 
-const MISSING_SCOPE_TAG = 'add `static readonly [scopeTag] = Symbol()` to ScopeClass implementation' as const
+const _scopeSymbol = Symbol()
 
 /**
  * @group Scoping
@@ -9,7 +9,9 @@ const MISSING_SCOPE_TAG = 'add `static readonly [scopeTag] = Symbol()` to ScopeC
 export function Scope() {
     abstract class _Scope {
         constructor(..._args: never) { }
-        static readonly scopeTag: symbol | typeof MISSING_SCOPE_TAG = MISSING_SCOPE_TAG
+        /** @ignore */
+        static readonly [_scopeSymbol] = null
+        static readonly scopeTag?: symbol
         static readonly inject: null
     }
     return _Scope
@@ -19,7 +21,10 @@ export function Scope() {
  * @group Scoping
  */
 export interface Scope {
-    readonly scopeTag: symbol | typeof MISSING_SCOPE_TAG
+    /** @ignore */
+    readonly [_scopeSymbol]: null
+    /** @ignore */
+    readonly scopeTag?: symbol
     readonly name?: string
     readonly inject: null
 }
@@ -29,7 +34,7 @@ export interface Scope {
  */
 export namespace Scope {
     export function isScope(target: any): target is Scope {
-        return 'scopeTag' in target && typeof target.scopeTag == 'symbol'
+        return _scopeSymbol in target
     }
 }
 
@@ -38,7 +43,7 @@ export namespace Scope {
  *
  * @group Scoping
  */
-export class Singleton extends Scope() { static readonly scopeTag = Symbol(); }
+export class Singleton extends Scope() { private _: any; }
 
 /**
  * @group Scoping
@@ -54,7 +59,7 @@ export namespace ScopeList {
     }
 
     export function isScopeList(target: any): target is ScopeList {
-        if ('scopeTag' in target && typeof target.scopeTag == 'symbol') return true
+        if (_scopeSymbol in target) return true
         if (target instanceof Array) return target.every(isScopeList)
         return false
     }
