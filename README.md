@@ -115,7 +115,7 @@ class IdKey extends TypeKey<number>() { private _: any }
 // You can set a 'ComputedKey' like `Inject.map(...)' as a default provider.
 // If 'CurrentUser' is not explicitly provided to a container, the default
 // provider will be used to resolve it.
-class CurrentUser extends TypeKey({
+class CurrentUserKey extends TypeKey({
   default: Inject.map([NameKey, IdKey], ([name, id]) => new User(name, id)),
 }) { private _: any }
 ```
@@ -195,6 +195,38 @@ without having to use `requestAsync` or `injectAsync`.
 Instead the dependent resource can await the promises independently.
 
 
+```ts
+class UserInfo extends Injectable {
+  name: string
+  private _id: Promise<number>
+  getIdAsync() { return _id }
+
+  constructor(name: string, id: Promise<number>) {
+    this.name = name; this._id = id
+  }
+}
+
+const ct = Container.create()
+//.provide(UserService, ...)
+  .provideAsync(IdKey,
+    { service: UserService}, ({ service }) => service.getIdAsync())
+  .provide(UserInfo, Inject.construct(UserInfo, NameKey, IdKey.Async()))
+
+// This would be a compile error because IdKey is not provided synchronously:
+// const id = ct.request(IdKey)
+
+// This is okay because Async() provides the value synchronously as a promise:
+let id = await ct.request(IdKey.Async())
+// It's equivalent to this:
+id = await ct.requestAsync()
+
+// This is okay even though it requires IdKey because it uses Async():
+const userInfo = ct.request(UserInfo)
+
+// userInfo is created but we still have to await IdKey's promise to get the id:
+id = await userInfo.getIdAsync()
+```
+
 ### Target Types
 
 [Target](https://youngspe.github.io/checked-inject/types/Target.html)\<K>,
@@ -204,6 +236,9 @@ from a container:
 
 <table>
 <tr><th>Kind</th><th>Key</th><th> Target Type</th></tr>
+
+
+<!-- TypeKey examples: -->
 <tr>
 <td>
 
@@ -214,6 +249,7 @@ from a container:
 <td>NameKey</td>
 <td>string</td>
 </tr>
+
 <tr>
 <td>
 
@@ -224,6 +260,9 @@ from a container:
 <td>IdKey</td>
 <td>number</td>
 </tr>
+
+
+<!-- InjectableClass examples: -->
 <tr>
 <td>
 
@@ -234,6 +273,45 @@ from a container:
 <td>User</td>
 <td>User</td>
 </tr>
+
+
+<!-- ComputedKey examples: -->
+<tr>
+<td>
+
+[ComputedKey](https://youngspe.github.io/checked-inject/classes/ComputedKey.html)
+
+</td>
+<td>
+
+`NameKey.Provider()`
+
+</td>
+<td>
+
+`() => NameKey()`
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+[ComputedKey](https://youngspe.github.io/checked-inject/classes/ComputedKey.html)
+
+</td>
+<td>
+
+`IdKey.Map()`
+
+</td>
+<td>
+
+`() => NameKey()`
+
+</td>
+</tr>
+
 <tr>
 <td>
 
@@ -261,6 +339,9 @@ User.Async().Lazy()
 
 </td>
 </tr>
+
+
+<!-- Structued key examples: -->
 <tr>
 <td>Object key</td>
 <td>
@@ -286,6 +367,7 @@ User.Async().Lazy()
 
 </td>
 </tr>
+
 <tr>
 <td>Array key</td>
 <td>

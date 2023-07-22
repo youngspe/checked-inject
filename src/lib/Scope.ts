@@ -11,6 +11,7 @@ export function Scope() {
         constructor(..._args: never) { }
         /** @ignore */
         static readonly [_scopeSymbol] = null
+        /** @ignore */
         static readonly scopeTag?: symbol
         static readonly inject: null
     }
