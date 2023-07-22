@@ -236,7 +236,7 @@ describe(Container, () => {
         class CustomKey2 extends TypeKey({
             default: Inject.map({ str: StringKey }, ({ str }) => ({ b: str })),
         }) {
-            static readonly keyTag = Symbol()
+            private _: any
             static readonly scope = Singleton
         }
 
@@ -273,7 +273,8 @@ describe(Container, () => {
     })
 
     test('TypeKey.scope is respected when no scope is provided', () => {
-        class MyScope extends Scope() { static readonly scopeTag = Symbol() }
+        class MyScope extends Scope() {  private _: any  }
+        type Asdf = typeof MyScope extends Scope ? true : false
         class CustomKey extends TypeKey<{ a: number }>() {
             static readonly keyTag = Symbol()
             static readonly scope = MyScope

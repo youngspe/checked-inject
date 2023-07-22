@@ -1,9 +1,8 @@
 
 // Dependency pair
 
-import { Container } from "./Container"
-import { Dependency, IsSync } from "./Dependency"
-import { Scope, ScopeList, Singleton } from "./Scope"
+import { Dependency } from "./Dependency"
+import { Scope, ScopeList } from "./Scope"
 
 /** @ignore */
 export interface DepPair<out K extends Dependency, D extends Dependency> {

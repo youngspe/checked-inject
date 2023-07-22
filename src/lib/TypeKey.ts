@@ -64,7 +64,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> e
  */
 export interface TypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
     /** A unique symbol distinguishing the type of this `TypeKey` from others. */
-    readonly keyTag: symbol
+    readonly keyTag: symbol | typeof MISSING_KEY_TAG
 }
 
 /** @ignore */

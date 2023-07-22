@@ -19,7 +19,7 @@ export function Scope() {
  * @group Scoping
  */
 export interface Scope {
-    readonly scopeTag: symbol
+    readonly scopeTag: symbol | typeof MISSING_SCOPE_TAG
     readonly name?: string
     readonly inject: null
 }

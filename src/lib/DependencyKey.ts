@@ -110,6 +110,11 @@ export abstract class UnableToResolveIsSync<in out K> {
 }
 
 /** @ignore */
+export abstract class NotDistinct<in out K> {
+    private _i!: K
+}
+
+/** @ignore */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
     K extends Scope | BaseTypeKey<any> | InjectableClass<any> ? K :

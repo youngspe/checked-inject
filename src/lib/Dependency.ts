@@ -1,7 +1,7 @@
 import { Scope } from './Scope'
-import { UnableToResolve, UnableToResolveIsSync } from './DependencyKey'
+import { NotDistinct, UnableToResolve, UnableToResolveIsSync } from './DependencyKey'
 import { PrivateConstruct } from './_internal'
-import { BaseTypeKey, HasTypeKeySymbol } from './TypeKey'
+import { BaseTypeKey } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
 
 const _isSyncSymbol = Symbol()
@@ -37,3 +37,4 @@ export type Dependency =
     | PrivateConstruct
     | UnableToResolve<any>
     | UnableToResolveIsSync<any>
+    | NotDistinct<any>

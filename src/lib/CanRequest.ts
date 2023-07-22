@@ -1,5 +1,5 @@
 import { Dependency, IsSync } from "./Dependency"
-import { DependencyKey, DepsOf, IsSyncDepsOf, UnableToResolve } from "./DependencyKey"
+import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from "./DependencyKey"
 import { InjectableClass } from "./InjectableClass"
 import { ChildGraph, DepPair, FlatGraph, GraphPairs, ProvideGraph, WithScope } from "./ProvideGraph"
 import { Scope } from "./Scope"
@@ -90,7 +90,16 @@ type _DepsForKey<
 type DepsForKey<
     P extends ProvideGraph,
     K extends Dependency,
-> = K extends any ? _DepsForKey<P, K> : never
+> = K extends any ? _DepsForKey<P, ValidateDep<K>> : never
 
+type ValidateDep<D extends Dependency> =
+    D extends BaseTypeKey | Scope ? (
+        // if keyTag is a symbol it's a valid TypeKey
+        D extends { readonly keyTag: symbol } | { readonly scopeTag: symbol } ? D :
+        // if D's instance type has no private fields it is not guaranted to be distinct
+        D extends { prototype: infer P } ? ({ [X in keyof P]: P[X] } extends P ? NotDistinct<D> : D) :
+        NotDistinct<D>
+    ) :
+    D
 type PairsOf<P extends ProvideGraph> = P['pairs']
 type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
