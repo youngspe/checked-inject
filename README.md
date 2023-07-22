@@ -285,11 +285,13 @@ from a container:
 <td>
 
 `NameKey.Provider()`
+or
+`Inject.provider(NameKey)`
 
 </td>
 <td>
 
-`() => NameKey()`
+`() => string`
 
 </td>
 </tr>
@@ -302,12 +304,14 @@ from a container:
 </td>
 <td>
 
-`IdKey.Map()`
+`IdKey.Map(id => id.toString())`
+or
+`Inject.map(IdKey, id => id.toString())`
 
 </td>
 <td>
 
-`() => NameKey()`
+string
 
 </td>
 </tr>
