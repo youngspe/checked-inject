@@ -1,6 +1,43 @@
 # checked-inject
 
-WIP
+[`npm install --save checked-inject`](https://www.npmjs.com/package/checked-inject)
+
+`checked-inject` is a dependency injection library that verifies all dependencies are met at compile time.
+
+```ts
+class NameKey extends TypeKey<string>() { private _: any }
+class IdKey extends TypeKey<number>() { private _: any }
+
+class User {
+  name: string
+  id: number
+  constructor(name: string, id: number) {
+    this.name = name; this.id = id
+  }
+
+  static inject = Inject.construct(this, NameKey, IdKey)
+}
+
+class App {
+  user: User
+  constructor(user: User) {
+    this.user = user
+  }
+}
+
+const UserModule = Module(ct => ct
+  .provideInstance(NameKey, 'Alice')
+  .provideInstance(IdKey, 123)
+)
+
+const AppModule = Module(UserModule, ct => ct
+  .provide(App, { user: User }, ({ user }) => new App(user))
+)
+
+AppModule.inject({ app: App }, ({ app }) => {
+  console.log(`Welcome, ${app.user.name}`)
+})
+```
 
 ## Injection
 
@@ -28,7 +65,7 @@ The dependencies are passed to the function `init`, which returns the resources'
 When provided, the provided resource is bound to the given Scope(s).
 
 `provider(key, [scope], computedKey)`
-supplied a `ComputedKey` that resolves to the resource to be returns when `key` is requested.
+supplies a `ComputedKey` that resolves to the resource to be returns when `key` is requested.
 
 ```ts
 const container = Container.create()
@@ -42,7 +79,7 @@ const container = Container.create()
 #### Requesting Resources
 
 ```ts
-// 'request' returns the resource
+// 'request' returns the resource identified by the given DependencyKey
 let user: User = container.request(User)
 // 'inject' calls the given function with the resource as an argument
 container.inject(User, user => console.log(user.name, user.id))
@@ -122,7 +159,51 @@ If you want an instance to have a shorter lifetime, you can create a custom Scop
 
 #### Custom Scopes
 
-WIP
+To ensure each Scope has its own distinct type, a Scope is declared as a class extending `Scope()` with at least one private member:
+
+```ts
+class MyScope extends Scope() { private _: any }
+```
+
+#### Subcomponents
+
+A [Subcomponent](https://youngspe.github.io/checked-inject/interfaces/Container-1.Subcomponent.html)
+transforms a list of arguments into a new child container.
+
+The [Inject.subcomponent](https://youngspe.github.io/checked-inject/functions/Inject.subcomponent.html)
+method takes a lambda that initializes a child container given a list of arguments.
+It returns a ComputedKey that resolves to a Subcomponent.
+
+```ts
+class UserScope extends Scope() { private _: any }
+const UserComponent = Inject.subcomponent((ct, name: string, id: number ) => ct
+  // UserScope allows us to cache dependencies that are only valid when a name
+  // and id are available
+  .addScope(UserScope)
+  .provideInstance(NameKey, name)
+  .provideInstance(IdKey, id)
+)
+
+const parent = Container.create()
+  // Binding the 'User' resource to 'UserScope' allows us to cache a single
+  // intance and return the same one every time 'User' is requested.
+  // 'Singleton' would be insufficient because 'NameKey' and 'IdKey' are
+  // provided in a child container, so they are unavailable in the Singleton
+  // scope.
+  .provide(User, UserScope, Inject.construct(NameKey, IdKey))
+
+// This will cause a compile error because `UserScope' is unavailable:
+// const user1 = parent.request(User)
+
+// The following three lines are equivalent:
+const child1 = parent.request(UserComponent)('Alice', 123)
+const child2 = parent.request(UserComponent.Build('Alice', 123))
+const child3 = parent.build(UserComponent, 'Alice', 123)
+
+// This is okay because child1 is in 'UserScope', and both 'NameKey' and 'IdKey'
+// are provided:
+const user2 = child1.request(User)
+```
 
 ### Modules
 

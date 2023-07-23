@@ -15,6 +15,9 @@ export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
 
 /**
  * A key that, transforms a provider for {@link K} into a provider of {@link T}.
+ *
+ * @group Dependencies
+ * @category ComputedKey
  */
 export abstract class ComputedKey<
     out T = any,
@@ -37,8 +40,13 @@ export abstract class ComputedKey<
     abstract init(deps: ComputedKey.Initializer<Target<K, P>> | InjectError): ComputedKey.Initializer<T> | InjectError
 }
 
+/**
+ * @group Dependencies
+ * @category ComputedKey
+ */
 export namespace ComputedKey {
     /** @ignore */
     export interface Of<out T = any> extends ComputedKey<T, any, any, any, any> { }
+    /** @ignore */
     export import Initializer = _Initializer
 }

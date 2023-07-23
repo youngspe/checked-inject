@@ -139,34 +139,47 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  * ## Target Types
  *
  * <table>
- * <tr><th>Kind</th><th>Key</th><th> Target Type </th></tr>
+ * <tr><th>Kind</th><th>Key</th><th> Target Type</th></tr>
+ *
+ *
+ * <!-- TypeKey examples: -->
  * <tr>
  * <td>
  *
- * {@link TypeKey}\<string>
+ * {@link TypeKey}
+ * \<string>
  *
  * </td>
  * <td>NameKey</td>
  * <td>string</td>
  * </tr>
+ *
  * <tr>
  * <td>
  *
- * {@link TypeKey}\<number>
+ * {@link TypeKey}
+ * \<number>
  *
  * </td>
- * <td>IdKey </td>
+ * <td>IdKey</td>
  * <td>number</td>
  * </tr>
+ *
+ *
+ * <!-- InjectableClass examples: -->
  * <tr>
  * <td>
  *
- * {@link InjectableClass}\<User>
+ * {@link InjectableClass}
+ * \<User>
  *
  * </td>
  * <td>User</td>
  * <td>User</td>
  * </tr>
+ *
+ *
+ * <!-- ComputedKey examples: -->
  * <tr>
  * <td>
  *
@@ -175,15 +188,58 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  * </td>
  * <td>
  *
+ * One of:
+ *
+ * ```ts
+ * NameKey.Provider()
+ * Inject.provider(NameKey)
+ * ```
+ *
+ * </td>
+ * <td>
+ *
+ * `() => string`
+ *
+ * </td>
+ * </tr>
+ *
+ * <tr>
+ * <td>
+ *
+ * {@link ComputedKey}
+ *
+ * </td>
+ * <td>
+ *
+ * One of:
+ *
+ * ```ts
+ * IdKey.Map(id => id.toString())
+ * Inject.map(IdKey, id => id.toString())
+ * ```
+ *
+ * </td>
+ * <td>
+ *
+ * string
+ *
+ * </td>
+ * </tr>
+ *
+ * <tr>
+ * <td>
+ *
+ * {@link ComputedKey}
+ *
+ * </td>
+ * <td>
+ *
+ * One of:
+ *
  * ```ts
  * Inject.async(User).Lazy()
- * ```
- * or
- * ```ts
  * Inject.lazy(Inject.async(User))
- * ```
- * or (if `User` extends `Injectable`)
- * ```ts
+ * // If 'User' extends 'Injectable':
  * User.Async().Lazy()
  * ```
  *
@@ -194,6 +250,9 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  *
  * </td>
  * </tr>
+ *
+ *
+ * <!-- Structued key examples: -->
  * <tr>
  * <td>Object key</td>
  * <td>
@@ -219,6 +278,7 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  *
  * </td>
  * </tr>
+ *
  * <tr>
  * <td>Array key</td>
  * <td>
