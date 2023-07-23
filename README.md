@@ -115,6 +115,15 @@ there will be a compile error ending with something like:
 `Type 'void' is not assignable to type 'typeof MyScope'.`
 where `MyScope` is a Scope a dependency is bound to but is not available.
 
+#### Singleton
+
+[Singleton](https://youngspe.github.io/checked-inject/classes/Singleton.html) is a built-in scope that's automatically assigned to a new Container. Use Singleton when you only want to create one instance of a resource.
+If you want an instance to have a shorter lifetime, you can create a custom Scope.
+
+#### Custom Scopes
+
+WIP
+
 ### Modules
 
 You can group providers into
