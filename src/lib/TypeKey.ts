@@ -38,6 +38,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> exte
 
 /**
  * A key for a custom dependency not bound to a specific class.
+ * A TypeKey implementation is a class object that extends {@link TypeKey}()
  *
  * @example
  *
