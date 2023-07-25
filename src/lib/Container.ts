@@ -596,7 +596,7 @@ export class Container<P extends Container.Graph> {
      * statically checking that the dependency is safe to request.
      *
      * @param key - A key specifying the dependency to request
-     * @returns {Target<K, P>} The requested dependency
+     * @returns The requested dependency
      *
      * @group Request Methods
      */

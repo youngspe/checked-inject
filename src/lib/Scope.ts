@@ -1,23 +1,25 @@
 
 /** Represents a scope for which certain dependencies are provided. */
 
+import { AbstractClass } from "./_internal"
+
 const _scopeSymbol = Symbol()
 
 /**
- * Generates a base class for a class object that extends {@link Scope}.
+ * Generates a base class for a class object that extends {@link !Scope:FOO}.
+ * classes
  *
  * @group Scoping
  */
-export function Scope() {
-    abstract class _Scope {
-        constructor(..._args: never) { }
+export function Scope(): Scope.ScopeClass {
+    abstract class _ScopeClass {
         /** @ignore */
         static readonly [_scopeSymbol] = null
         /** @ignore */
         static readonly scopeTag?: symbol
         static readonly inject: null
     }
-    return _Scope
+    return _ScopeClass
 }
 
 /**
@@ -39,6 +41,8 @@ export namespace Scope {
     export function isScope(target: any): target is Scope {
         return _scopeSymbol in target
     }
+
+    export interface ScopeClass extends AbstractClass<any, never>, Scope { }
 }
 
 /**

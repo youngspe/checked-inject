@@ -88,11 +88,11 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
 /** @ignore */
 export interface TypeKeyClass<out T, Def extends ComputedKey<T>> extends
     AbstractKey,
-    AbstractClass<any, [never]>,
+    AbstractClass<any, never>,
     BaseTypeKey<T, Def> { }
 
 /**
- * Generates a base class for a class object that extends `TypeKey<T>`.
+ * Generates a base class for a class object that extends {@link TypeKey}\<T>`.
  * Classes that extend the returned base class should have a
  * `private _: any` property (or any other private member) to ensure the key has its own unique type.
  *

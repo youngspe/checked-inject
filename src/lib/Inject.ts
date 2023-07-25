@@ -283,7 +283,7 @@ export namespace Inject {
     class _Async<K extends DependencyKey> extends Async<K> { }
 
     /**
-     * Resolves to a {@link Promise}<{@link Target}<typeof {@link src}>>.
+     * Resolves to a {@link Promise}\<{@link Target}\<typeof {@link src}>>.
      * This is useful for requesting asynchronous dependencies when the dependent resource doesn't need the resolved value right away.
      *
      * @see
