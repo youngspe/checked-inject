@@ -34,6 +34,22 @@ export abstract class BaseModule<P extends ProvideGraph = any> implements Module
     abstract applyTo(ct: Container.Builder<any>): Container<P>
 
     /**
+     * {@inheritDoc Container.requestUnchecked}
+     * @see {@link Container.requestUnchecked}
+     */
+    requestUnchecked<K extends DependencyKey>(key: K): ModuleActual<K, P> {
+        return requestForModule(this, key)
+    }
+
+    /**
+     * {@inheritDoc Container.requestAsyncUnchecked}
+     * @see {@link Container.requestAsyncUnchecked}
+     */
+    requestAsyncUnchecked<K extends DependencyKey>(key: K): Promise<ModuleActual<K, P>> {
+        return requestAsyncForModule(this, key)
+    }
+
+    /**
      * {@inheritDoc Container.request}
      * @see {@link Container.request}
      */

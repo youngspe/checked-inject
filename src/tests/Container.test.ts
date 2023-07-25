@@ -1,4 +1,5 @@
 import { Container, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
+import { _assertContainer, _because } from '../lib/Container'
 
 class NumberKey extends TypeKey<number>() { private _: any }
 class StringKey extends TypeKey<string>() { private _: any }
@@ -274,7 +275,6 @@ describe(Container, () => {
 
     test('TypeKey.scope is respected when no scope is provided', () => {
         class MyScope extends Scope() { private _: any }
-        type Asdf = typeof MyScope extends Scope ? true : false
         class CustomKey extends TypeKey<{ a: number }>() {
             private _: any
             static readonly scope = MyScope
@@ -306,7 +306,7 @@ describe(Container, () => {
 
         const out2 = child2.request(CustomKey)
 
-        expect(parent.request(CustomKey.Optional())).toBeUndefined()
+        _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         expect(out1).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out1)
 
@@ -336,7 +336,7 @@ describe(Container, () => {
 
         const out = child1.request(CustomKey)
 
-        expect(parent.request(CustomKey.Optional())).toBeUndefined()
+        _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         expect(out).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out)
     })

@@ -8,7 +8,7 @@ import { Target, DepsOf, DependencyKey, IsSyncDepsOf } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
-import { CanRequest, unresolved } from './CanRequest'
+import { CanRequest, RequestFailed, unresolved } from './CanRequest'
 import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, DependencyFailedError, InjectPropertyError, DependencyNotSyncError } from './InjectError'
 
 // This entry has a dependency key and an initializer function
@@ -954,3 +954,44 @@ export namespace Container {
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
     }
 }
+
+type CannotRequest<G extends Container.Graph, K extends DependencyKey, Sync extends Dependency = IsSyncDepsOf<K>>
+    = CanRequest<G, K, Sync> extends infer C ? (unknown extends C ? never : C) : never
+
+interface Invariant<in out T> { }
+
+/**
+ * @ignore
+ * @internal
+ */
+export function _assertContainer<G extends Container.Graph>(ct: Container<G> | Module<G>) {
+    return {
+        cannotRequestSync<K extends DependencyKey>(this: CanRequest<G, K, never>, key: K, _because?: Invariant<CanRequest<G, K>>) {
+            try {
+                ct.requestUnchecked(key)
+                throw new Error('expected request to fail')
+            } catch { }
+            ct.requestAsyncUnchecked(key)
+        },
+        cannotRequest<K extends DependencyKey>(key: K, _because?: Invariant<CanRequest<G, K, never>>) {
+            try {
+                ct.requestAsyncUnchecked(key)
+                throw new Error('expected request to fail')
+            } catch { }
+
+            try {
+                ct.requestUnchecked(key)
+                throw new Error('expected requestAsync to fail')
+            } catch { }
+        },
+    }
+}
+
+/**
+ * @ignore
+ * @internal
+ */
+export function _because<K, Sync extends TypeKey | InjectableClass = never>(): Invariant<RequestFailed<
+    | K
+    | (Sync extends infer S extends TypeKey | InjectableClass ? NotSync<S> : never)
+>> | undefined { return undefined }

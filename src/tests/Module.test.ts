@@ -1,4 +1,5 @@
 import { Inject, Module, TypeKey } from '../lib'
+import { _assertContainer, _because } from '../lib/Container'
 import { sleep } from './utils'
 
 namespace Keys {
@@ -88,6 +89,7 @@ describe(Module, () => {
             }))
         )
 
+        _assertContainer(AppModule).cannotRequestSync(AppKey, _because<never, typeof FooService | typeof Keys.UserId>())
         const out = await AppModule.injectAsync({ AppKey }, deps => deps.AppKey)
 
         expect(out).toEqual({

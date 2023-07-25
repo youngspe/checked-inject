@@ -13,7 +13,8 @@ type UnresolvedKeys<
 
 export const unresolved = Symbol()
 
-interface RequestFailed<K> {
+/** @ignore */
+export interface RequestFailed<in out K> {
     [unresolved]: (K extends any ? [K] : never)[0]
 }
 
@@ -67,7 +68,7 @@ type DepsForKeyIsSync<
 > =
     K2 extends PairsOf<P> ? K :
     K2 extends KeyWithoutDefault ? never :
-    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K, Sync> :
+    K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K2, Sync> :
     UnableToResolve<['DepsForKeyIsSync', K]>
 
 type DepsForKeyFallback<
