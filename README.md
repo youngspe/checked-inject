@@ -1,5 +1,7 @@
 # checked-inject
 
+[Documentation](https://youngspe.github.io/checked-inject/)
+
 [`npm install --save checked-inject`](https://www.npmjs.com/package/checked-inject)
 
 `checked-inject` is a dependency injection library that verifies all dependencies are met at compile time.
