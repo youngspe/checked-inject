@@ -24,7 +24,7 @@ function requestAsyncForModule<P extends ProvideGraph, K extends DependencyKey>(
 
 type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = Target<K, Merge<DefaultGraph, P>>
 
-/** An object used to provide definitions to a `Container` */
+/** An object used to provide definitions to a {@link Container} */
 export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {
     /** @ignore */
     readonly [unresolved]!: [null]

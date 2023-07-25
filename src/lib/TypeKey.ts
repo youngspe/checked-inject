@@ -19,7 +19,7 @@ type ClassLike<T> = Class<T> | ((...args: any[]) => T)
 // Use this to prevent library consumers from generating types equivalent to `TypeKey`.
 const _typeKeySymbol: unique symbol = Symbol()
 
-export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends HasTypeKeySymbol<T> {
+export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> extends HasTypeKeySymbol<T> {
     /** @ignore */
     readonly keyTag?: symbol
     /** The {@link Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
@@ -46,7 +46,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> e
  * class NameKey extends TypeKey<string>() { private _: any }
  * class IdKey extends TypeKey<string>() { private _: any }
  *
- * class User { constructor(name: string, id: string) /* ... *\/ }
+ * class User { constructor(name: string, id: string) {} }
  *
  * const ct = Container.create()
  *   .provideInstance(NameKey, 'Alice')
@@ -62,7 +62,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey.Of<T> = any> e
  * @group Dependencies
  * @category TypeKey
  */
-export interface TypeKey<out T = any, Def extends ComputedKey.Of<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
+export interface TypeKey<out T = any, Def extends ComputedKey<T> = any> extends BaseTypeKey<T, Def>, AbstractKey {
     /** @ignore */
     readonly keyTag?: symbol
 }
@@ -75,7 +75,7 @@ export interface BaseTypeKeyWithDefault<
     out T,
     D extends Dependency,
     Sync extends Dependency,
-> extends BaseTypeKey<T, ComputedKey<T, any, D, any, Sync>> { }
+> extends BaseTypeKey<T, ComputedKey<T, any, D, Sync>> { }
 
 /** @ignore */
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
@@ -85,7 +85,7 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
     | ClassWithDefault<T, D, Sync>
 
 /** @ignore */
-export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
+export interface TypeKeyClass<out T, Def extends ComputedKey<T>> extends
     AbstractKey,
     AbstractClass<any, [never]>,
     BaseTypeKey<T, Def> { }
@@ -93,7 +93,7 @@ export interface TypeKeyClass<out T, Def extends ComputedKey.Of<T>> extends
 /**
  * Generates a base class for a class object that extends `TypeKey<T>`.
  * Classes that extend the returned base class should have a
- * `private _: any` property to ensure uniqueness.
+ * `private _: any` property (or any other private member) to ensure the key has its own unique type.
  *
  * @return A base class that can be extended to produce a `TypeKey<T>` class object.
  *
@@ -165,12 +165,12 @@ export function TypeKey<T>(): TypeKeyClass<T, never>
 export function TypeKey<T>(options: TypeKey.Options<T, never>): TypeKeyClass<T, never>
 
 export function TypeKey<
-    Def extends ComputedKey.Of<T>,
-    T = Def extends ComputedKey.Of<infer _T> ? _T : never,
+    Def extends ComputedKey<T>,
+    T = Def extends ComputedKey<infer _T> ? _T : never,
 >(options: TypeKey.Options<T, Def>): TypeKeyClass<T, Def>
 
 export function TypeKey<
-    Def extends ComputedKey.Of<T>,
+    Def extends ComputedKey<T>,
     T,
 >({ default: defaultInit, of, name = of?.name }: TypeKey.Options<T, Def> = {} as any): TypeKeyClass<T, Def> {
     return asMixin(class _TypeKey {
@@ -190,7 +190,7 @@ export function TypeKey<
  * @category TypeKey
  */
 export namespace TypeKey {
-    export interface Options<T, Def extends ComputedKey.Of<T>> {
+    export interface Options<T, Def extends ComputedKey<T>> {
         /**
          * A class or function. The name will be used to name this `TypeKey`
          * and the return type can be used to infer the target type.
@@ -208,26 +208,40 @@ export namespace TypeKey {
     }
 }
 
-/** Convenience for a TypeKey that specifically resolves to a a function that, given `Args`, returns `T`. */
-
 /**
+ * Convenience for a {@link TypeKey} that resolves a function of the form
+ * `(...args: Args) => T`.
+ *
  * @group Dependencies
  * @category TypeKey
  */
 export interface FactoryKey<Args extends any[], T> extends TypeKey<(...args: Args) => T> { }
-
+/**
+ * A specialized form of {@link TypeKey} that resolves a function of the form
+ * `(...args: Args) => T`.
+ *
+ * @group Dependencies
+ * @category TypeKey
+ */
 export function FactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...args: Args) => T, never>
 
+/**
+ * @param fac - A default value for the factory function
+ */
+export function FactoryKey<T, Args extends any[]>(
+    fac: (...args: Args) => T,
+): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, void>>
+
+/**
+ * @param deps - A {@link DependencyKey} specifying dependencies of the factory function
+ * @param fac - A function that accepts the specified dependency followed by {@link Args}
+ */
 export function FactoryKey<
     T,
     Args extends any[],
     K extends DependencyKey,
->(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>>
+>(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, K>>
 
-/**
- * @group Dependencies
- * @category TypeKey
- */
 export function FactoryKey<
     T,
     Args extends any[],
@@ -235,11 +249,15 @@ export function FactoryKey<
 >(
     ...args:
         | []
+        | [fac: (...args: Args) => T]
         | [deps: K, fac: (deps: Target<K>, ...args: Args) => T]
-): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, K>> {
+): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, K>> {
     if (args.length == 2) {
         let [deps, fac] = args
-        return TypeKey<ComputedKey<(...args: Args) => T, K>>({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
+        return TypeKey({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
+    }
+    if (args.length == 1) {
+        return TypeKey({ default: Inject.value(args[0]) })
     }
     return TypeKey()
 }

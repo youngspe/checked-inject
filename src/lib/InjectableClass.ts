@@ -1,4 +1,4 @@
-import { ComputedKey, HasComputedKeySymbol } from './ComputedKey'
+import { ComputedKey } from './ComputedKey'
 import { ScopeList } from './Scope'
 import { Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
@@ -37,7 +37,7 @@ export interface InjectableClass<T = any> extends Class<T> {
     /**
      * A {@link ComputedKey} that, if provided, specifies how to resolve this class if no provider was supplied.
      */
-    readonly inject?: ComputedKey.Of<T> | (() => ComputedKey.Of<T>)
+    readonly inject?: ComputedKey<T> | (() => ComputedKey<T>)
 }
 
 export interface ClassWithoutDefault extends InjectableClass<any> {
@@ -45,7 +45,7 @@ export interface ClassWithoutDefault extends InjectableClass<any> {
 }
 
 export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
-    readonly inject: ComputedKey<T, any, D, any, Sync> | (() => ComputedKey<T, any, D, any, Sync>)
+    readonly inject: ComputedKey<T, any, D, Sync> | (() => ComputedKey<T, any, D, Sync>)
 }
 
 abstract class _Injectable { }
@@ -60,5 +60,5 @@ export abstract class Injectable<T = any> extends asMixin(_Injectable, AbstractK
     /** {@inheritDoc InjectableClass.scope} */
     readonly scope?: ScopeList
     /** {@inheritDoc InjectableClass.inject} */
-    readonly inject?: ComputedKey.Of<T> | (() => ComputedKey.Of<T>)
+    readonly inject?: ComputedKey<T> | (() => ComputedKey<T>)
 }

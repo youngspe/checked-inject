@@ -89,7 +89,7 @@ type _Target<K extends DependencyKey, G extends Container.Graph = never> = Conta
 /**
  * The type that {@link K} resolves to.
  *
- * @template G - The {@link Container.Graph} of the {@link Container} resolving {@link K}
+ * @typeParam G - The {@link Container.Graph} of the {@link Container} resolving {@link K}
  * @group Injection
  */
 export type Target<K extends DependencyKey, G extends Container.Graph = never> =

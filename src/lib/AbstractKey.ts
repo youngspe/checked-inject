@@ -47,9 +47,19 @@ export abstract class AbstractKey {
     }
 
     /**
+     * Applicable when `this` is a key that resolves to a function, for example
+     * a {@link SubcomponentDefinition} or a {@link FactoryKey}.
+     * Resolves to the output of the function when called with {@link args}.
      *
-     * @param args
-     * @returns
+     * ```ts
+     * class UserFactory extends FactoryKey(
+     *   (name: string, id: number) => new User(name, id),
+     * ) { private _: any }
+     *
+     * container.inject({ user: UserFactory.Build(name, id) }, ({ user }) => {
+     *   console.log(user.name, user.id)
+     * })
+     * ```
      *
      * @see {@link Inject.build}
      * @group DependencyKey Operators
@@ -63,9 +73,16 @@ export abstract class AbstractKey {
     }
 
     /**
+     * Applies the given {@link transform} to the resolved value of this {@link DependencyKey}.
      *
-     * @param transform
-     * @returns
+     * @example
+     *
+     * ```ts
+     * class IdNum extends TypeKey<number>() { private _: any }
+     * class IdStr extends TypeKey({
+     *   default: IdNum.Map(id => id.toString()),
+     * }) { private _: any }
+     * ```
      *
      * @see {@link Inject.map}
      * @group DependencyKey Operators

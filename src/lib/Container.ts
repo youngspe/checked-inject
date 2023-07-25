@@ -4,7 +4,7 @@ import { Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
-import { Target, DepsOf, DependencyKey } from './DependencyKey'
+import { Target, DepsOf, DependencyKey, IsSyncDepsOf } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
@@ -14,7 +14,7 @@ import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, Dependency
 // This entry has a dependency key and an initializer function
 interface EntryInit<T, P extends ProvideGraph, K extends DependencyKey> {
     scope?: Scope[]
-    binding: ComputedKey<T, K, any, P, any>
+    binding: ComputedKey<T, K, any, any, P>
     sync: boolean
 }
 
@@ -310,7 +310,7 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: [scope: ScopeList<S>] | [],
             ...init:
-            | [ComputedKey<Target<K>, any, D, P, Sync>]
+            | [ComputedKey<Target<K>, any, D, Sync, P>]
             | [...deps: [SrcK] | [], init: (deps: Target<SrcK, P>) => Target<K>],
         ]
     ): this {
@@ -344,7 +344,7 @@ export class Container<P extends Container.Graph> {
                 }
             }
         } else {
-            const binding = args[args.length - 1] as ComputedKey<T, SrcK, any>
+            const binding = args[args.length - 1] as ComputedKey<T, SrcK>
             if (binding instanceof Inject.Value) {
                 entry = {
                     value: { instance: binding.instance }
@@ -428,7 +428,7 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [init: ComputedKey<Target<K>, any, D, P, Sync>]
+            | [init: ComputedKey<Target<K>, any, D, Sync, P>]
             | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
             | [init: () => Target<K>]
         ]
@@ -483,7 +483,7 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: Opt<[scope: ScopeList<S>]>,
             ...init:
-            | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, P, any>]
+            | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
             | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
             | [init: () => ValueOrPromise<Target<K>>]
         ]
@@ -497,7 +497,7 @@ export class Container<P extends Container.Graph> {
      * @template K - The type of the key or class object
      * @param key - The key or class of the type to be provided
      * @param instance - The provided instance
-     * @returns This container, now typed to include the provieded type and its dependencies
+     * @returns This container, now typed to include the provided type and its dependencies
      *
      * @group Provide Methods
      */
@@ -508,6 +508,28 @@ export class Container<P extends Container.Graph> {
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
         this._setKeyProvider(_key, { value: { instance } })
         return this as any
+    }
+
+    /**
+     * Binds the resolved value of {@link src} to {@link key}.
+     * In other words, when {@link key} is requested, {@link src} will be used to provide the value.
+     * Equivalent to `provide(key, Inject.from(src))`
+     *
+     * @param key - The key or class of the type to be provided
+     * @param src - The {@link DependencyKey} to use to when {@link key} is requested
+     * @returns This container, now typed to include the provided type and its dependencies
+     *
+     * @group Provide Methods
+     */
+    bind<
+        K extends TypeKey | InjectableClass,
+        Src extends DependencyKey.Of<Target<K>>,
+    >(key: K, src: Src): Container<Provide<
+        P,
+        | DepPair<K, DepsOf<Src>>
+        | DepPair<IsSync<K>, IsSyncDepsOf<K>>
+    >> {
+        return this._provide(true, key, Inject.from(src) as ComputedKey<Target<K>>) as any
     }
 
     /**
@@ -866,7 +888,7 @@ export namespace Container {
             ...args: [
                 ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [init: ComputedKey<Target<K>, any, D, P, Sync>]
+                | [init: ComputedKey<Target<K>, any, D, Sync, P>]
                 | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
                 | [init: () => Target<K>]
             ]
@@ -890,7 +912,7 @@ export namespace Container {
             ...args: [
                 ...scope: Opt<[scope: ScopeList<S>]>,
                 ...init:
-                | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, P, any>]
+                | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
                 | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
                 | [init: () => ValueOrPromise<Target<K>>]
             ]
@@ -903,6 +925,19 @@ export namespace Container {
         provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Builder<
             Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
         >
+
+        /**
+         * {@inheritDoc Container.bind}
+         * @see {@link Container.bind}
+         */
+        bind<
+            K extends TypeKey | InjectableClass,
+            Src extends DependencyKey.Of<Target<K>>,
+        >(key: K, src: Src): Builder<Provide<
+            P,
+            | DepPair<K, DepsOf<Src>>
+            | DepPair<IsSync<K>, IsSyncDepsOf<Src>>
+        >>
 
         /**
          * {@inheritDoc Container.addScope}

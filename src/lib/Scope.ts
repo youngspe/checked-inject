@@ -4,6 +4,8 @@
 const _scopeSymbol = Symbol()
 
 /**
+ * Generates a base class for a class object that extends {@link Scope}.
+ *
  * @group Scoping
  */
 export function Scope() {
