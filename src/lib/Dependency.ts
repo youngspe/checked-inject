@@ -25,7 +25,7 @@ export type RequireSync<D extends Dependency> = D extends BaseTypeKey | Injectab
 /**
  * A low-level dependency for a {@link DependencyKey}.
  * Generally, you won't need to interact with this type much.
- * It includes {@link Scope}, {@link TypeKey}, and {@link InjectableClass}.
+ * It includes {@link Scope:type | Scope}, {@link TypeKey:type | TypeKey}, and {@link InjectableClass}.
  *
  * @group Dependencies
  */

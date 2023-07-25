@@ -72,8 +72,10 @@ export function asMixinClass<
     })
 }
 
+/** @ignore */
 export type Initializer<T, Arg = void> = Initializer.Sync<T, Arg> | Initializer.Async<T, Arg>
 
+/** @ignore */
 export namespace Initializer {
     export interface Sync<T, in Arg = void> extends Base<T, Arg> {
         sync: true

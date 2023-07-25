@@ -36,8 +36,8 @@ export abstract class AbstractKey {
     }
 
     /**
-     *
-     * @returns
+     * Resolves to a {@link Promise} of the target value, allowing a synchronous resource
+     * to depend on an asynchronous one.
      *
      * @see {@link Inject.async}
      * @group DependencyKey Operators

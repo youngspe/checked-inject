@@ -84,9 +84,9 @@ export namespace Inject {
      * ```
      *
      * @see
-     *  {@link TypeKey.Map|TypeKey.Map},
-     *  {@link ComputedKey.Map|ComputedKey.Map},
-     *  {@link Injectable.Map|Injectable.Map}
+     *  {@link TypeKey.Map | TypeKey.Map},
+     *  {@link ComputedKey.Map | ComputedKey.Map},
+     *  {@link Injectable.Map | Injectable.Map}
      */
     export function map<
         T,
@@ -180,9 +180,9 @@ export namespace Inject {
      * If {@link src} identifies an asynchronous resource, wrap it in {@link async} first to resolve to an async function.
      *
      * @see
-     *  {@link TypeKey.Lazy|TypeKey.Lazy},
-     *  {@link ComputedKey.Lazy|ComputedKey.Lazy},
-     *  {@link Injectable.Lazy|Injectable.Lazy}
+     *  {@link TypeKey.Lazy | TypeKey.Lazy},
+     *  {@link ComputedKey.Lazy | ComputedKey.Lazy},
+     *  {@link Injectable.Lazy | Injectable.Lazy}
      */
     export function lazy<K extends DependencyKey>(src: K): GetLazy<K> {
         return new _GetLazy(src)
@@ -207,9 +207,9 @@ export namespace Inject {
      * If {@link src} identifies an asynchronous resource, wrap it in {@link async} first to resolve to an async function.
      *
      * @see
-     *  {@link TypeKey.Provider|TypeKey.Provider},
-     *  {@link ComputedKey.Provider|ComputedKey.Provider},
-     *  {@link Injectable.Provider|Injectable.Provider}
+     *  {@link TypeKey.Provider | TypeKey.Provider},
+     *  {@link ComputedKey.Provider | ComputedKey.Provider},
+     *  {@link Injectable.Provider | Injectable.Provider}
      */
     export function provider<K extends DependencyKey>(src: K): GetProvider<K> {
         return new _GetProvider(src)
@@ -230,9 +230,9 @@ export namespace Inject {
      * Allows for opt-out of the static checks that {@link src} can be resolved.
      *
      * @see
-     *  {@link TypeKey.Optional|TypeKey.Optional},
-     *  {@link ComputedKey.Optional|ComputedKey.Optional},
-     *  {@link Injectable.Optional|Injectable.Optional}
+     *  {@link TypeKey.Optional | TypeKey.Optional},
+     *  {@link ComputedKey.Optional | ComputedKey.Optional},
+     *  {@link Injectable.Optional | Injectable.Optional}
      */
     export function optional<K extends DependencyKey>(src: K): Optional<K> {
         return new _Optional(src)
@@ -260,9 +260,9 @@ export namespace Inject {
      * Resolves to the output of the function when called with {@link args}.
      *
      * @see
-     *  {@link TypeKey.Build|TypeKey.Build},
-     *  {@link ComputedKey.Build|ComputedKey.Build},
-     *  {@link Injectable.Build|Injectable.Build}
+     *  {@link TypeKey.Build | TypeKey.Build},
+     *  {@link ComputedKey.Build | ComputedKey.Build},
+     *  {@link Injectable.Build | Injectable.Build}
      */
     export function build<
         K extends DependencyKey.Of<(...args: Args) => Out>,
@@ -287,9 +287,9 @@ export namespace Inject {
      * This is useful for requesting asynchronous dependencies when the dependent resource doesn't need the resolved value right away.
      *
      * @see
-     *  {@link TypeKey.Async|TypeKey.Async},
-     *  {@link ComputedKey.Async|ComputedKey.Async},
-     *  {@link Injectable.Async|Injectable.Async}
+     *  {@link TypeKey.Async | TypeKey.Async},
+     *  {@link ComputedKey.Async | ComputedKey.Async},
+     *  {@link Injectable.Async | Injectable.Async}
      */
     export function async<K extends DependencyKey>(src: K): Async<K> {
         return new _Async(src)

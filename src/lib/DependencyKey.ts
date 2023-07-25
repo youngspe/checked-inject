@@ -146,7 +146,7 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  * <tr>
  * <td>
  *
- * {@link TypeKey}
+ * {@link TypeKey:type | TypeKey}
  * \<string>
  *
  * </td>
@@ -157,7 +157,7 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  * <tr>
  * <td>
  *
- * {@link TypeKey}
+ * {@link TypeKey:type | TypeKey}
  * \<number>
  *
  * </td>

@@ -87,7 +87,7 @@ export class Container<P extends Container.Graph> {
      * Creates a new {@link Container} instance.
      *
      * @param options - Options for creating the container
-     * @param options.scope - A {@link Scope} or {@link ScopeList} to assign to the container
+     * @param options.scope - A {@link Scope:type | Scope} or {@link ScopeList} to assign to the container
      *
      * @group Static Methods
      */
@@ -370,13 +370,13 @@ export class Container<P extends Container.Graph> {
      *
      * @example
      *
-     * Provide the {@link TypeKey} `NameKey` with a function returning a string:
+     * Provide the {@link TypeKey:type | TypeKey} `NameKey` with a function returning a string:
      *
      *  ```ts
      * myContainer.provide(NameKey, () => 'Alice')
      *  ```
      *
-     * Provide the {@link TypeKey} `IdKey` within the {@link Scope} `MyScope`,
+     * Provide the {@link TypeKey:type | TypeKey} `IdKey` within the {@link Scope:type | Scope} `MyScope`,
      * so the function is only called once per container with `MyScope`
      *
      *  ```ts
@@ -461,7 +461,7 @@ export class Container<P extends Container.Graph> {
      * @template D - Identifies the dependencies of the provided type
      * @param key - The key or class of the type to be provided
      * @param args - The remaining arguments. These include:
-     *  * `scope` (optional): The {@link Scope} or {@link ScopeList} to which to bind the provided value
+     *  * `scope` (optional): The {@link Scope:type | Scope} or {@link ScopeList} to which to bind the provided value
      *  And one of the following:
      *  * `init`: An async function returning the provided value,
      *    or a {@link ComputedKey} yielding the provided value or a promise
@@ -670,7 +670,7 @@ export class Container<P extends Container.Graph> {
     }
 
     /**
-     * Applies the given {@link Module | Modules} or {@link Module.Item | Items} to this container.
+     * Applies the given {@link Module:type | Modules} or {@link Module.Item | Items} to this container.
      * All scopes and dependencies provided with the modules will be applied to this container.
      *
      * @param modules - The modules to apply to the container.

@@ -61,6 +61,7 @@ export abstract class BaseComputedKey<
 > extends ComputedKey<T, K, D, Sync, P> { }
 
 /**
+ * @ignore
  * @group Dependencies
  * @category ComputedKey
  */

@@ -1,11 +1,13 @@
 import { Inject } from './Inject'
 import { ComputedKey } from './ComputedKey'
 import { AbstractKey } from './AbstractKey'
-import { ScopeList } from './Scope'
+import { Scope, ScopeList } from './Scope'
 import { DependencyKey, Target } from './DependencyKey'
 import { AbstractClass, Class, asMixin } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
+
+import TypeKeyClass = TypeKey.TypeKeyClass
 
 /** @ignore */
 export interface HasTypeKeySymbol<out T> {
@@ -22,15 +24,13 @@ const _typeKeySymbol: unique symbol = Symbol()
 export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> extends HasTypeKeySymbol<T> {
     /** @ignore */
     readonly keyTag?: symbol
-    /** The {@link Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
+    /** The {@link Scope:type | Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
     readonly scope?: ScopeList
-    /** The name of the class object that implements `TypeKey`. */
-    readonly name: string
     /** The name that will be displayed in exception messages. */
     readonly fullName: string
     /** A class or function returning the target value of this `TypeKey`. */
     readonly of?: ClassLike<T>
-    /** @ignore */
+    /** @ignore prevent a TypeKey from being an InjectableClass */
     readonly inject: null
     /** @ignore */
     readonly defaultInit?: Def
@@ -38,7 +38,9 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> exte
 
 /**
  * A key for a custom dependency not bound to a specific class.
- * A TypeKey implementation is a class object that extends {@link TypeKey}()
+ *
+ * @see The {@link TypeKey | TypeKey()} function for implementing TypeKey.
+ * A TypeKey implementation is a class object that extends {@link TypeKey}().
  *
  * @example
  *
@@ -85,18 +87,12 @@ export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
     | BaseTypeKeyWithDefault<T, D, Sync>
     | ClassWithDefault<T, D, Sync>
 
-/** @ignore */
-export interface TypeKeyClass<out T, Def extends ComputedKey<T>> extends
-    AbstractKey,
-    AbstractClass<any, never>,
-    BaseTypeKey<T, Def> { }
-
 /**
- * Generates a base class for a class object that extends {@link TypeKey}\<T>`.
+ * Generates a base class for a class object that extends {@link TypeKey:type}\<T>.
  * Classes that extend the returned base class should have a
  * `private _: any` property (or any other private member) to ensure the key has its own unique type.
  *
- * @return A base class that can be extended to produce a `TypeKey<T>` class object.
+ * @returns A base class that can be extended to produce a `TypeKey<T>` class object.
  *
  * @example
  *
@@ -104,7 +100,7 @@ export interface TypeKeyClass<out T, Def extends ComputedKey<T>> extends
  * class NameKey extends TypeKey<string>() { private _: any }
  * ```
  *
- * @example with {@link Scope}:
+ * @example with {@link Scope:type}:
  *
  * ```ts
  * class NameKey extends TypeKey<string>() {
@@ -179,7 +175,7 @@ export function TypeKey<
         /** @ignore */
         static readonly keyTag?: symbol
         static readonly of = of
-        static readonly fullName = this.name + (name ? `(${name})` : '')
+        static get fullName() { return this.name + (name ? `(${name})` : '') }
         static readonly defaultInit = defaultInit
         static readonly inject = null
         static toString() { return this.fullName }
@@ -207,10 +203,16 @@ export namespace TypeKey {
     export function isTypeKey(target: any): target is BaseTypeKey<any> {
         return _typeKeySymbol in target
     }
+
+    /** Class returned by {@link TypeKey}. Extend this to implement {@link TypeKey:type}. */
+    export interface TypeKeyClass<out T, Def extends ComputedKey<T>> extends
+        AbstractKey,
+        AbstractClass<any, never>,
+        BaseTypeKey<T, Def> { }
 }
 
 /**
- * Convenience for a {@link TypeKey} that resolves a function of the form
+ * Convenience for a {@link TypeKey:type | TypeKey} that resolves a function of the form
  * `(...args: Args) => T`.
  *
  * @group Dependencies

@@ -1,64 +1,65 @@
-import { TypeKey } from './TypeKey';
-import { ScopeList } from './Scope';
-import { DependencyKey } from './DependencyKey';
+import { TypeKey } from './TypeKey'
+import { Scope, ScopeList } from './Scope'
+import { DependencyKey } from './DependencyKey'
+
 
 /** Represents a possible error when resolving a dependency. */
-
 export abstract class InjectError extends Error { }
-/** Error thrown when requeting a TypeKey whose value was not provided. */
 
+/** Error thrown when requeting a TypeKey whose value was not provided. */
 export class TypeKeyNotProvidedError extends InjectError {
-    readonly key: TypeKey;
+    readonly key: TypeKey
     constructor(key: TypeKey) {
-        super(key.name ? `TypeKey ${key.name} not provided.` : 'TypeKey not provided.');
-        this.key = key;
+        super(`TypeKey ${key.fullName} not provided`)
+        this.key = key
     }
 }
+
 /** Error thrown when requeting a TypeKey whose value was not provided. */
-
 export class DependencyNotSyncError extends InjectError {
-    readonly key?: DependencyKey;
+    readonly key?: DependencyKey
     constructor(key?: DependencyKey) {
-        super('Dependency not provided synchronously.');
-        this.key = key;
+        super('Dependency not provided synchronously')
+        this.key = key
     }
 }
-/** Error thrown when a dependency's dependency has failed to resolve. */
 
+function wrapMessage(err: InjectError) {
+    return err instanceof InjectPropertyError ? err.message : `(${err.message})`
+}
+
+/** Error thrown when a dependency's dependency has failed to resolve. */
 export class DependencyFailedError extends InjectError {
-    readonly cause: InjectError;
+    readonly cause: InjectError
 
     constructor(cause: InjectError) {
-        super(`Dependency failed: ${cause.message}`);
-        this.cause = cause;
+        super(`Dependency failed: ${wrapMessage(cause)}`)
+        this.cause = cause
     }
 }
-/** Error thrown when a member of a structured dependency key failed to resolve. */
 
+/** Error thrown when a member of a structured dependency key failed to resolve. */
 export class InjectPropertyError extends InjectError {
-    readonly childErrors: {
-        [K in keyof any]?: InjectError;
-    };
-    constructor(childErrors: {
-        [K in keyof any]?: InjectError;
-    }) {
+    readonly childErrors: { [K in keyof any]?: InjectError }
+    constructor(childErrors: { [K in keyof any]?: InjectError }) {
         super([
             '{',
             ...Object
                 .getOwnPropertyNames(childErrors)
-                .flatMap(e => `${e}: ${childErrors[e]?.message?.split('\n')},`)
+                .flatMap(e => childErrors[e] ? `${e}: ${childErrors[e]?.message},`.split('\n') : [])
                 .map(l => `  ${l}`),
             '}',
-        ].join('\n'));
-        this.childErrors = childErrors;
+        ].join('\n'))
+        this.childErrors = childErrors
     }
 }
 
+/** Error thrown when a dependency is bound to a {@link Scope:type | Scope} that is unavailable. */
 export class ScopeUnavailableError extends InjectError {
-    readonly scope: ScopeList;
+    readonly scope: ScopeList
     constructor(scope: ScopeList) {
-        const message = `Scope ${ScopeList.flatten(scope).map(s => s.name ?? '<unnamed>').join('|')} unavailable`;
-        super(message);
-        this.scope = scope;
+        const message = `Scope ${ScopeList.flatten(scope).map(s => s.fullName).join('|')} unavailable`
+        super(message)
+        this.scope = scope
     }
 }
