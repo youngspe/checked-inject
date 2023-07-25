@@ -4,7 +4,7 @@
 
 [`npm install --save checked-inject`](https://www.npmjs.com/package/checked-inject)
 
-`checked-inject` is a dependency injection library that verifies all dependencies are met at compile time.
+`checked-inject` is a TypeScript dependency injection library that verifies all dependencies are met at compile time.
 
 ```ts
 class NameKey extends TypeKey<string>() { private _: any }
