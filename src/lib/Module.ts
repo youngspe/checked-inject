@@ -29,7 +29,7 @@ type ModuleActual<K extends DependencyKey, P extends ProvideGraph> = Target<K, M
  */
 export abstract class BaseModule<P extends ProvideGraph = any> implements Module.ApplyTo<P> {
     /** @ignore */
-    readonly [unresolved]!: [null]
+    readonly [unresolved]!: void
 
     abstract applyTo(ct: Container.Builder<any>): Container<P>
 
