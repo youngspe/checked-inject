@@ -1,4 +1,4 @@
-import { TypeKey } from './TypeKey'
+import { BaseTypeKey, TypeKey } from './TypeKey'
 import { Scope, ScopeList } from './Scope'
 import { DependencyKey } from './DependencyKey'
 
@@ -51,6 +51,14 @@ export class InjectPropertyError extends InjectError {
             '}',
         ].join('\n'))
         this.childErrors = childErrors
+    }
+}
+
+export class DependencyCycleError extends InjectError {
+    readonly key: TypeKey
+    constructor(key: TypeKey) {
+        super(`Dependency cycle while resolving ${key.fullName}`)
+        this.key = key
     }
 }
 

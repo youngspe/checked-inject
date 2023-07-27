@@ -273,7 +273,7 @@ describe(Container, () => {
         expect(out).toBe(instance)
     })
 
-    test('TypeKey.scope is respected when no scope is provided', () => {
+    test('TypeKey.scope is respected when no scope is provided', async () => {
         class MyScope extends Scope() { private _: any }
         class CustomKey extends TypeKey<{ a: number }>() {
             private _: any
@@ -306,7 +306,7 @@ describe(Container, () => {
 
         const out2 = child2.request(CustomKey)
 
-        _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
+        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         expect(out1).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out1)
 
@@ -314,7 +314,7 @@ describe(Container, () => {
         expect(grandChild2.request(CustomKey)).toBe(out2)
     })
 
-    test('Provided scope added to TypeKey.scope', () => {
+    test('Provided scope added to TypeKey.scope', async () => {
         class MyScope extends Scope() { private _: any }
         class CustomKey extends TypeKey<{ a: number }>() {
             private _: any
@@ -336,7 +336,7 @@ describe(Container, () => {
 
         const out = child1.request(CustomKey)
 
-        _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
+        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         expect(out).toEqual({ a: 20 })
         expect(grandChild1.request(CustomKey)).toBe(out)
     })
@@ -514,6 +514,14 @@ describe(Container, () => {
 
         expect(sync1).not.toBe(sync2)
         expect(async1).not.toBe(async2)
+    })
+
+    test('cyclic with Optional', () => {
+        const target = Container.create()
+            .provide(NumberKey, StringKey, s => 0)
+            .provide(StringKey, NumberKey.Optional().Lazy(), s => 'asdf')
+
+        target.request(NumberKey)
     })
 
     test('README sample', () => {

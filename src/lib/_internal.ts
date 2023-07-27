@@ -72,24 +72,38 @@ export function asMixinClass<
     })
 }
 
-/** @ignore */
-export type Initializer<T, Arg = void> = Initializer.Sync<T, Arg> | Initializer.Async<T, Arg>
+export interface Initializer<T, Arg = void> {
+    (arg: Arg): Initializer.Out<T>
+}
 
-/** @ignore */
 export namespace Initializer {
-    export interface Sync<T, in Arg = void> extends Base<T, Arg> {
-        sync: true
-        init(arg: Arg): T
+    export interface Sync<T, Arg = void> extends Initializer<T, Arg> {
+        (arg: Arg): Initializer.Ref<T>
     }
-    export interface Async<T, in Arg = void> extends Base<T, Arg> {
-        sync?: false
+    export interface Ref<T> { readonly value: T }
+    export type Out<T> = Ref<T> | Promise<Ref<T>>
+    export function flatMap<T, U, Arg = void>(
+        init: Initializer<T, Arg>,
+        transform: (value: T) => Initializer<U>,
+    ): Initializer<U, Arg> {
+        return (arg: Arg) => {
+            const ref = init(arg)
+            if ('value' in ref) { return transform(ref.value)() }
+            return ref.then(({ value }) => transform(value)())
+        }
     }
-
-    export interface Base<T, in Arg = void> {
-        sync?: boolean
-        init(arg: Arg): T | Promise<T>
+    export function chain<T, U, Arg = void>(
+        init: Initializer<T, Arg>,
+        transform: Initializer<U, T>
+    ): Initializer<U, Arg> {
+        return (arg: Arg) => {
+            const ref = init(arg)
+            if ('value' in ref) { return transform(ref.value) }
+            return ref.then(({ value }) => transform(value))
+        }
     }
 }
+
 
 export function isObject(x: unknown): x is object {
     return x !== null && (typeof x == 'object' || typeof x == 'function')

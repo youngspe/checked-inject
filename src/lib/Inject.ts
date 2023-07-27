@@ -19,7 +19,8 @@ export namespace Inject {
         constructor(value: T) {
             super()
             this.instance = value
-            this._init = { sync: true, init: () => value }
+            const ref = { value }
+            this._init = () => ref
         }
 
         init(): Initializer.Sync<T> {
@@ -46,14 +47,7 @@ export namespace Inject {
 
         init(deps: InjectError | Initializer<Target<K, G>>): InjectError | Initializer<T> {
             if (deps instanceof InjectError) return deps
-            if (deps.sync) return {
-                sync: true,
-                init: () => this._transform(deps.init()),
-            }
-            return {
-                sync: deps.sync,
-                init: () => maybePromiseThen(deps.init(), this._transform),
-            }
+            return Initializer.chain(deps, x => ({ value: this._transform(x) }))
         }
     }
 
@@ -155,21 +149,26 @@ export namespace Inject {
     /** @see {@link lazy} */
     export abstract class GetLazy<K extends DependencyKey>
         extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
-        override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
+        override init(deps: Initializer<Target<K>> | InjectError): Initializer.Sync<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
-            if (!deps.sync) return new DependencyNotSyncError()
-            let d: Initializer.Sync<Target<K>> | null = deps
+            let d: Initializer<Target<K>> | null = deps
             let value: Target<K> | null = null
 
-
-            const f = () => {
-                if (d?.sync) {
-                    value = d.init()
-                    d = null
+            const out = {
+                value: () => {
+                    if (d) {
+                        const ref = d()
+                        if ('value' in ref) {
+                            value = ref.value
+                            d = null
+                        } else {
+                            throw new DependencyNotSyncError()
+                        }
+                    }
+                    return value as Target<K>
                 }
-                return value as Target<K>
             }
-            return { sync: true, init: () => f }
+            return () => out
         }
     }
 
@@ -192,11 +191,19 @@ export namespace Inject {
     /** @see {@link provider} */
     export abstract class GetProvider<K extends DependencyKey>
         extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
-        override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
+        override init(deps: Initializer<Target<K>> | InjectError): Initializer.Sync<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
-            if (!deps.sync) return new DependencyNotSyncError()
-            const f = () => deps.init()
-            return { sync: true, init: () => f }
+            const out = {
+                value: () => {
+                    const ref = deps()
+                    if ('value' in ref) {
+                        return ref.value
+                    } else {
+                        throw new DependencyNotSyncError()
+                    }
+                }
+            }
+            return () => out
         }
     }
 
@@ -217,10 +224,14 @@ export namespace Inject {
         return new _GetProvider(src)
     }
 
+    const undefinedRef = { value: undefined }
+    const undefinedInit = () => undefinedRef
+
     /** @see {@link optional} */
     export abstract class Optional<K extends DependencyKey> extends BaseComputedKey<Target<K> | undefined, K, never, IsSyncDepsOf<K>> {
+
         override init(deps: Initializer<Target<K>> | InjectError): Initializer<Target<K> | undefined> {
-            if (deps instanceof InjectError) return { sync: true, init: () => undefined }
+            if (deps instanceof InjectError) return undefinedInit
             return deps
         }
     }
@@ -276,9 +287,9 @@ export namespace Inject {
 
     /** @see {@link async} */
     export abstract class Async<K extends DependencyKey> extends BaseComputedKey<Promise<Target<K>>, K, DepsOf<K>, never> {
-        override init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer.Sync<Promise<Target<K>>> {
+        override init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer<Promise<Target<K>>> {
             if (deps instanceof InjectError) return deps
-            return { sync: true, init: () => Promise.resolve(deps.init()) }
+            return () => ({ value: Promise.resolve(deps()).then(({ value }) => value) })
         }
     }
 

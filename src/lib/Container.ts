@@ -1,5 +1,5 @@
 import { BaseTypeKey, TypeKey } from './TypeKey'
-import { ComputedKey } from './ComputedKey'
+import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
@@ -9,33 +9,37 @@ import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, RequestFailed, unresolved } from './CanRequest'
-import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, DependencyFailedError, InjectPropertyError, DependencyNotSyncError } from './InjectError'
+import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, DependencyFailedError, InjectPropertyError, DependencyNotSyncError, DependencyCycleError } from './InjectError'
 
 // This entry has a dependency key and an initializer function
-interface EntryInit<T, P extends ProvideGraph, K extends DependencyKey> {
+interface EntryBinding<T, P extends ProvideGraph, K extends DependencyKey> {
     scope?: Scope[]
     binding: ComputedKey<T, K, any, any, P>
-    sync: boolean
+}
+
+interface EntryInitializer<T> {
+    initializer: Initializer<T>
+}
+
+interface EntryError {
+    error: InjectError
 }
 
 interface EntryInstance<T> {
-    instance: T
-}
-
-interface EntryPromise<T> {
-    promise: Promise<T>
+    instance: Initializer.Out<T>
 }
 
 interface Entry<T, P extends ProvideGraph, K extends DependencyKey> {
     value:
-    | EntryInit<T, P, K>
+    | EntryBinding<T, P, K>
+    | EntryInitializer<T>
+    | EntryError
     // This entry has a predefined instance we can return
     | EntryInstance<T>
-    | EntryPromise<T>
     isLocal: boolean
 }
 
-type LocalEntry<T> = { instance: T } | { promise: Promise<T> } | {}
+interface LocalEntry<T> { instance?: Initializer.Out<T> }
 
 type ExcludeUnspecifiedScope<S> = S extends any ? (
     Scope extends S ? never : S
@@ -62,7 +66,21 @@ type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends 
 const _classTypeKey = Symbol()
 const _depsTag = Symbol()
 type Opt<T> = T | []
-type ValueOrPromise<T> = T | Promise<T>
+
+class ProvideFromInitializer<T, K extends DependencyKey, G extends Container.Graph = never>
+    extends BaseComputedKey<T, K, DepsOf<K>, IsSyncDepsOf<K>, G> {
+    private readonly _init: Initializer<T, Target<K, G>>
+
+    constructor(src: K, init: Initializer<T, Target<K, G>>) {
+        super(src)
+        this._init = init
+    }
+
+    init(deps: InjectError | Initializer<Target<K, G>>): InjectError | Initializer<T> {
+        return (deps instanceof InjectError) ? deps
+            : Initializer.chain(deps, this._init)
+    }
+}
 
 /**
  * The dependency injection container for `checked-inject`.
@@ -142,7 +160,7 @@ export class Container<P extends Container.Graph> {
                         if (scope.length > 0) { isLocal = false }
                     }
                     // Use the default provider if available for this key
-                    entry = { value: { binding, scope, sync: true }, isLocal }
+                    entry = { value: { binding, scope }, isLocal }
                     break
                 }
 
@@ -156,41 +174,29 @@ export class Container<P extends Container.Graph> {
             _localEntry = this._localInstances.get(key)
             if (!_localEntry) {
                 this._localInstances.set(key, _localEntry = {})
-            } else if ('instance' in _localEntry) {
-                const instance = _localEntry.instance
-                return { sync: true, init: () => instance }
-            } else if ('promise' in _localEntry) {
-                const promise = _localEntry.promise
-                return {
-                    sync: false,
-                    init() {
-                        if (_localEntry && 'instance' in _localEntry) return _localEntry.instance
-                        return promise
-                    }
-                }
+            } else if (_localEntry.instance) {
+                const localEntry = _localEntry
+                return () => localEntry.instance!
             }
         }
 
         const localEntry = _localEntry
-
         const value = entry.value
 
+        if ('error' in value) return value.error
         // If this dependency is just an instance, return that
-        if ('instance' in value) return { sync: true, init: () => value.instance }
-        if ('promise' in value) return {
-            sync: false,
-            init() {
-                if ('instance' in entry.value) return entry.value.instance
-                else return value.promise
-            },
-        }
+        if ('instance' in value) return () => (entry.value as EntryInstance<T>).instance
+        if ('initializer' in value) return value.initializer
 
         const valueScope = value.scope?.length ? value.scope : undefined
 
         let dependencyContainer: Container<any> = this
         if (valueScope) {
             const missingScopes = this._missingScopes(valueScope)
-            if (missingScopes.length > 0) return new ScopeUnavailableError(missingScopes)
+            if (missingScopes.length > 0) {
+                entry.value = { get error() { return new ScopeUnavailableError(missingScopes) } }
+                return entry.value.error
+            }
 
             let ct: Container<any> | undefined = this
 
@@ -212,68 +218,57 @@ export class Container<P extends Container.Graph> {
             }
         }
 
+        {
+            let newValue: EntryInitializer<T> | undefined
+            entry.value = newValue = {
+                initializer: () => {
+                    if (entry.value === newValue) throw new DependencyCycleError(key)
+                    if ('instance' in entry.value) return entry.value.instance
+                    if ('binding' in entry.value) throw new Error('binding should not happen after initializer is set')
+                    if ('error' in entry.value) throw new DependencyFailedError(entry.value.error)
+                    return entry.value.initializer()
+                }
+            }
+        }
         // Get the dependencies needed to intialize the requested value
         const depsResult = (dependencyContainer as Container<P>)._getProvider(value.binding.inner)
         const initializer = value.binding.init(depsResult)
 
-        if (initializer instanceof InjectError) return new DependencyFailedError(initializer)
-        if (!valueScope) {
-            let init: Initializer<T> | null = initializer
-            if (localEntry) return {
-                init() {
-                    try {
-                        if ('instance' in localEntry) {
-                            return localEntry.instance
-                        } else if ('promise' in localEntry) {
-                            return localEntry.promise
-                        } else {
-                            const output = init!.init()
-                            const initSync = init!.sync
-                            if (!initSync && isPromise(output)) {
-                                const local = localEntry as { promise?: Promise<T> }
-                                local.promise = output
-                                output.then(x => {
-                                    delete local.promise;
-                                    (localEntry as any).instance = x
-                                })
-                            } else {
-                                const local = localEntry as { instance: T }
-                                local.instance = output as T
-                            }
-                            return output
-                        }
-                    } finally {
-                        init = null
-                    }
-                },
-                get sync() { return 'instance' in localEntry || initializer.sync },
-            } as Initializer<T>
-            return value.sync ? initializer : {
-                init: () => initializer.init(),
-                sync: false,
-            } as Initializer<T>
+        if (initializer instanceof InjectError) {
+            const innerError = initializer
+            entry.value = { get error() { return new DependencyFailedError(innerError) } }
+            return entry.value.error
         }
-        let init = nullable(initializer)
+        let init: Initializer<T> | null = initializer
 
-        const provider: Initializer.Base<T> = {
-            sync: initializer.sync && value.sync, init() {
+        let provider: Initializer<T>
+        if (!valueScope) {
+            if (localEntry) {
+                provider = () => {
+                    if (localEntry.instance) return localEntry.instance
+                    const output = init!()
+                    init = null
+                    const local = localEntry as { instance?: Initializer.Out<T> }
+                    local.instance = output
+                    if ('then' in output) {
+                        output.then(ref => { local.instance = ref })
+                    }
+                    return output
+                }
+
+            } else {
+                provider = initializer
+            }
+        } else {
+            provider = () => {
                 try {
                     if ('instance' in entry.value) return entry.value.instance
-                    if ('promise' in entry.value) return entry.value.promise
 
-                    const initSync = init?.sync
-                    // Assuming entry won't change from 'instance' or 'promise' to 'binding', init should be defined at this point
-                    let output = init!.init()
-                    if (!initSync && isPromise(output)) {
-                        entry.value = { promise: output }
-                        output.then(x => {
-                            this.sync = true
-                            entry.value = { instance: x }
-                        })
-                    } else {
-                        this.sync = true
-                        entry.value = { instance: output as T }
-                    }
+                    // Assuming entry won't change from 'instance' to 'binding', init should be defined at this point
+                    let output = init!()
+                    init = null
+                    entry.value = { instance: output }
+                    if ('then' in output) { output.then(ref => { entry.value = { instance: ref } }) }
                     return output
                 } finally {
                     init = null
@@ -281,7 +276,8 @@ export class Container<P extends Container.Graph> {
             }
         }
 
-        return provider as Initializer<T>
+        entry.value = { initializer: provider }
+        return provider
     }
 
     private _getClassTypKey<T>(cls: InjectableClass<T>): TypeKey<T> {
@@ -305,8 +301,8 @@ export class Container<P extends Container.Graph> {
     private _getProvider<K extends DependencyKey>(deps: K): Initializer<Target<K, P>> | InjectError {
         type T = Target<K, P>
 
-        if (deps == null) return { sync: true, init: () => deps as T }
-        if (Object.is(deps, Container.Key)) return { sync: true, init: () => this as T }
+        if (deps == null) return () => ({ value: deps as T })
+        if (Object.is(deps, Container.Key)) return () => ({ value: this as T })
         if (TypeKey.isTypeKey(deps)) return this._getTypeKeyProvider(deps as TypeKey<T>) as Initializer<T>
         if (deps instanceof ComputedKey) return deps.init(this._getProvider(deps.inner))
         if (typeof deps == 'function') return this._getClassProvider(deps as InjectableClass<T>)
@@ -317,7 +313,6 @@ export class Container<P extends Container.Graph> {
         let _deps = deps as { [X in keyof _K]: _K[X] & DependencyKey.Of<_T[X]> }
 
         const providers: { [X in keyof _K]?: Initializer<Target<_K[X], P>> } = arrayLength == null ? {} : new Array(arrayLength) as any
-        let allSync = true
 
         let failed = false
         const errors: { [X in keyof _K]?: InjectError } = {}
@@ -329,41 +324,36 @@ export class Container<P extends Container.Graph> {
                 errors[prop] = provider
             } else if (!failed) {
                 providers[prop] = provider
-                allSync = allSync && !!provider.sync
             }
         }
 
         if (failed) return new InjectPropertyError(errors)
 
-        if (allSync) return {
-            sync: true, init: () => {
-                const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
-
-                for (let prop in providers) {
-                    out[prop] = providers[prop]!.init() as typeof out[keyof _K]
-                }
-
-                return out as T
+        return () => {
+            const refs = (arrayLength == null ? {} : new Array(arrayLength)) as unknown as {
+                [X in keyof _T]?: Initializer.Ref<_T[X]> | Promise<Initializer.Ref<_T[X]>>
             }
-        }
+            const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
+            let allSync = true
 
-        return {
-            sync: false, async init() {
-                const promises = (arrayLength == null ? {} : new Array(arrayLength)) as unknown as {
-                    [X in keyof _T]?: _T[X] | Promise<_T[X]>
-                }
-                const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
-
-                for (let prop in providers) {
-                    promises[prop] = providers[prop]!.init()
-                }
-
-                for (let prop in promises) {
-                    out[prop] = providers[prop]!.sync ? promises[prop] as _T[keyof _T] : await promises[prop]
-                }
-
-                return out as T
+            for (let prop in providers) {
+                const ref = refs[prop] = providers[prop]!()
+                allSync = allSync && 'value' in ref
             }
+
+            if (allSync) {
+                for (let prop in refs) {
+                    out[prop] = (refs[prop] as Initializer.Ref<T>).value
+                }
+                return { value: out as T }
+            }
+
+            return (async () => {
+                for (let prop in refs) {
+                    out[prop] = (await refs[prop])!.value
+                }
+                return { value: out as T }
+            })()
         }
     }
 
@@ -415,9 +405,11 @@ export class Container<P extends Container.Graph> {
             const init = args[args.length - 1] as (deps: Target<SrcK, P>) => T
             entry = {
                 value: {
-                    binding: Inject.map(deps, init),
+                    binding: new ProvideFromInitializer(deps,
+                        sync ? deps => ({ value: init(deps) })
+                            : async deps => ({ value: await init(deps) }),
+                    ),
                     scope,
-                    sync,
                 },
                 isLocal,
             }
@@ -425,7 +417,7 @@ export class Container<P extends Container.Graph> {
             const binding = args[args.length - 1] as ComputedKey<T, SrcK>
             if (binding instanceof Inject.Value) {
                 entry = {
-                    value: { instance: binding.instance },
+                    value: { instance: { value: binding.instance } },
                     isLocal: false,
                 }
             } else {
@@ -433,7 +425,6 @@ export class Container<P extends Container.Graph> {
                     value: {
                         binding,
                         scope,
-                        sync,
                     },
                     isLocal,
                 }
@@ -554,7 +545,8 @@ export class Container<P extends Container.Graph> {
      * @group Provide Methods
      */
     provideAsync<
-        K extends TypeKey<any> | InjectableClass<any>,
+        T,
+        K extends TypeKey<Awaited<T>> | InjectableClass<Awaited<T>>,
         SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         S extends Scope = never,
@@ -563,9 +555,9 @@ export class Container<P extends Container.Graph> {
         ...args: [
             ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
             ...init:
-            | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
-            | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
-            | [init: () => ValueOrPromise<Target<K>>]
+            | [init: ComputedKey<T, any, D, any, P>]
+            | [deps: SrcK, init: (deps: Target<SrcK, P>) => T]
+            | [init: () => T]
         ]
     ): Container<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>> {
         return this._provide(false, key as any, ...args) as any
@@ -586,7 +578,7 @@ export class Container<P extends Container.Graph> {
     > {
         type T = Target<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
-        this._setKeyProvider(_key, { value: { instance }, isLocal: false })
+        this._setKeyProvider(_key, { value: { instance: { value: instance } }, isLocal: false })
         return this as any
     }
 
@@ -642,13 +634,11 @@ export class Container<P extends Container.Graph> {
      */
     requestUnchecked<K extends DependencyKey>(key: K): Target<K, P> {
         const provider = this._getProvider(key)
-        if (provider instanceof InjectError) {
-            throw provider
-        }
-        if (!provider.sync) {
-            throw new DependencyNotSyncError(key)
-        }
-        return provider.init()
+        if (provider instanceof InjectError) throw provider
+
+        const output = provider()
+        if ('then' in output) throw new DependencyNotSyncError(key)
+        return output.value
     }
 
     /**
@@ -668,7 +658,9 @@ export class Container<P extends Container.Graph> {
         if (provider instanceof InjectError) {
             throw provider
         }
-        return Promise.resolve(provider.init())
+        const output = provider()
+
+        return ('value' in output) ? Promise.resolve(output.value) : output.then(({ value }) => value)
     }
 
     /**
@@ -984,7 +976,8 @@ export namespace Container {
          * @see {@link Container.provideAsync}
          */
         provideAsync<
-            K extends TypeKey<any> | InjectableClass<any>,
+            T,
+            K extends TypeKey<Awaited<T>> | InjectableClass<Awaited<T>>,
             SrcK extends DependencyKey = never,
             D extends Dependency = DepsOf<SrcK>,
             S extends Scope = never,
@@ -993,9 +986,9 @@ export namespace Container {
             ...args: [
                 ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
                 ...init:
-                | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
-                | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
-                | [init: () => ValueOrPromise<Target<K>>]
+                | [init: ComputedKey<T, any, D, any, P>]
+                | [deps: SrcK, init: (deps: Target<SrcK, P>) => T]
+                | [init: () => T]
             ]
         ): Builder<Provide<P, PairForProvide<K, D, S> | DepPair<IsSync<K>, NotSync<K>>>>
 
@@ -1044,16 +1037,16 @@ interface Invariant<in out T> { }
  */
 export function _assertContainer<G extends Container.Graph>(ct: Container<G> | Module<G>) {
     return {
-        cannotRequestSync<K extends DependencyKey>(this: CanRequest<G, K, never>, key: K, _because?: Invariant<CanRequest<G, K>>) {
+        async cannotRequestSync<K extends DependencyKey>(this: CanRequest<G, K, never>, key: K, _because?: Invariant<CanRequest<G, K>>) {
             try {
                 ct.requestUnchecked(key)
                 throw new Error('expected request to fail')
             } catch { }
-            ct.requestAsyncUnchecked(key)
+            await ct.requestAsyncUnchecked(key)
         },
-        cannotRequest<K extends DependencyKey>(key: K, _because?: Invariant<CanRequest<G, K, never>>) {
+        async cannotRequest<K extends DependencyKey>(key: K, _because?: Invariant<CanRequest<G, K, never>>) {
             try {
-                ct.requestAsyncUnchecked(key)
+                await ct.requestAsyncUnchecked(key)
                 throw new Error('expected request to fail')
             } catch { }
 

@@ -89,7 +89,7 @@ describe(Module, () => {
             }))
         )
 
-        _assertContainer(AppModule).cannotRequestSync(AppKey, _because<never, typeof FooService | typeof Keys.UserId>())
+        await _assertContainer(AppModule).cannotRequestSync(AppKey, _because<never, typeof FooService | typeof Keys.UserId>())
         const out = await AppModule.injectAsync({ AppKey }, deps => deps.AppKey)
 
         expect(out).toEqual({
