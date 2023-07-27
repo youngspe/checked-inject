@@ -1,4 +1,4 @@
-import { AsyncFactoryKey, Container, FactoryKey, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
+import { AsyncFactoryKey, Container, FactoryKey, Inject, Module, Scope, Singleton, Target, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
 
 class NumberKey extends TypeKey<number>() { private _: any }
@@ -490,10 +490,10 @@ describe(Container, () => {
 
         const child = parent.createChild()
 
-        const [sync1, async1] = parent.request([Fac, AsyncFac])
+        const [sync1, async1] = parent.request([Fac, AsyncFac] as const)
 
         {
-            const [sync1a, sync1b, async1a, async1b] = parent.request([Fac, Fac, AsyncFac, AsyncFac])
+            const [sync1a, sync1b, async1a, async1b] = parent.request([Fac, Fac, AsyncFac, AsyncFac] as const)
             expect(sync1).toBe(sync1a)
             expect(sync1).toBe(sync1b)
 
@@ -501,10 +501,10 @@ describe(Container, () => {
             expect(async1).toBe(async1b)
         }
 
-        const [sync2, async2] = child.request([Fac, AsyncFac])
+        const [sync2, async2] = child.request([Fac, AsyncFac] as const)
 
         {
-            const [sync2a, sync2b, async2a, async2b] = child.request([Fac, Fac, AsyncFac, AsyncFac])
+            const [sync2a, sync2b, async2a, async2b] = child.request([Fac, Fac, AsyncFac, AsyncFac] as const)
             expect(sync2).toBe(sync2a)
             expect(sync2).toBe(sync2b)
 
@@ -516,12 +516,50 @@ describe(Container, () => {
         expect(async1).not.toBe(async2)
     })
 
-    test('cyclic with Optional', () => {
-        const target = Container.create()
-            .provide(NumberKey, StringKey, s => 0)
-            .provide(StringKey, NumberKey.Optional().Lazy(), s => 'asdf')
+    test('cyclic with Optional', async () => {
+        interface Custom1 { a: Custom2 }
+        interface Custom2 { b: () => Promise<Custom1 | undefined> }
+        class CustomKey1 extends TypeKey<Custom1>() {
+            private _: any
+            static scope = Singleton
+        }
+        class CustomKey2 extends TypeKey<Custom2>() { private _: any }
 
-        target.request(NumberKey)
+        const MyModule = Module(ct => ct
+            .provideAsync(CustomKey1, Inject.from({ a: CustomKey2 }))
+            .provide(CustomKey2, Inject.from({ b: CustomKey1.Optional().Async().Lazy() }))
+        )
+
+        await MyModule.injectAsync([CustomKey1, CustomKey2] as const, async ([c1, c2]) => {
+            expect(c1).toBe(await c2.b())
+        })
+
+        await MyModule.injectAsync([CustomKey2, CustomKey1] as const, async ([c2, c1]) => {
+            expect(c1).toBe(await c2.b())
+        })
+    })
+
+    test('cyclic with Unchecked', () => {
+        interface Custom1 { a: Custom2 }
+        interface Custom2 { b: () => Custom1 }
+        class CustomKey1 extends TypeKey<Custom1>() {
+            private _: any
+            static scope = Singleton
+        }
+        class CustomKey2 extends TypeKey<Custom2>() { private _: any }
+
+        const MyModule = Module(ct => ct
+            .provide(CustomKey1, Inject.from({ a: CustomKey2 }))
+            .provide(CustomKey2, Inject.from({ b: CustomKey1.Unchecked().Lazy() }))
+        )
+
+        MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {
+            expect(c1).toBe(c2.b())
+        })
+
+        MyModule.inject([CustomKey2, CustomKey1] as const, ([c2, c1]) => {
+            expect(c1).toBe(c2.b())
+        })
     })
 
     test('README sample', () => {

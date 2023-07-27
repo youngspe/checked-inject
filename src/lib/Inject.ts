@@ -251,6 +251,30 @@ export namespace Inject {
         return new _Optional(src)
     }
 
+    export abstract class Unchecked<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, never, IsSyncDepsOf<K>> {
+        override init(deps: Initializer<Target<K>> | InjectError) {
+            return deps
+        }
+    }
+
+    /** @see {@link unchecked} */
+    class _Unchecked<K extends DependencyKey> extends Unchecked<K>{ }
+
+    /**
+     * Requests a value for {@link src}, without compile-time verification of dependencies.
+     * An exception will be thrown if the dependency is not available upon request.
+     *
+     * Static verification that {@link src} can be resolved synchronously is still performed.
+     *
+     * @see
+     *  {@link TypeKey.Unchecked | TypeKey.Unchecked},
+     *  {@link ComputedKey.Unchecked | ComputedKey.Unchecked},
+     *  {@link Injectable.Unchecked | Injectable.Unchecked}
+     */
+    export function unchecked<K extends DependencyKey>(src: K): Unchecked<K> {
+        return new _Unchecked(src)
+    }
+
     /** @see {@link build} */
     export abstract class Build<
         K extends DependencyKey.Of<(...args: Args) => Out>,

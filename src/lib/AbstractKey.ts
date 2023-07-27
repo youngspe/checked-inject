@@ -36,6 +36,19 @@ export abstract class AbstractKey {
     }
 
     /**
+     * Requests a value for this key, without compile-time verification of dependencies.
+     * An exception will be thrown if the dependency is not available upon request.
+     *
+     * Static verification that this key can be resolved synchronously is still performed.
+     *
+     * @see {@link Inject.unchecked}
+     * @group DependencyKey Operators
+     */
+    Unchecked<Th extends DependencyKey>(this: Th): Inject.Unchecked<Th> {
+        return Inject.unchecked(this)
+    }
+
+    /**
      * Resolves to a {@link Promise} of the target value, allowing a synchronous resource
      * to depend on an asynchronous one.
      *

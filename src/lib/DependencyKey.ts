@@ -19,7 +19,7 @@ export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> = 
 /** @ignore An array representing a structured set of type keys to produce type `T`. */
 export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
-    T extends [] ? [] :
+    T extends readonly [] ? [] :
     T extends readonly any[] ? DependencyKey[] & {
         readonly [K in Extract<keyof T, number>]: DependencyKey.Of<T[K], D, Sync>
     } :
@@ -49,7 +49,7 @@ type Actual<K extends DependencyKey> =
     never
 
 type ArrayActual<K extends readonly DependencyKey[]> =
-    K extends [] ? [] :
+    K extends readonly [] ? [] :
     K extends readonly [
         infer A extends DependencyKey,
         ...infer B extends DependencyKey[]
@@ -69,7 +69,7 @@ type Leaves<T> =
 
 type ContainerTransform<T, P extends Container.Graph> =
     [P] extends [never] ? T : Container<any> extends Leaves<T> ? (
-        T extends [] ? [] :
+        T extends readonly [] ? [] :
         T extends readonly [infer A, ...infer B] ? [
             ContainerTransform<A, P>,
             ...ContainerTransform<B, P>
@@ -302,7 +302,7 @@ export type IsSyncDepsOf<K extends DependencyKey> =
  */
 export type DependencyKey =
     | OnlyObject<DependencyKey>
-    | DependencyKey[]
+    | readonly DependencyKey[]
     | HasComputedKeySymbol<any>
     | HasTypeKeySymbol<any>
     | PrivateConstruct
