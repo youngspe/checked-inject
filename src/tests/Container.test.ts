@@ -1,4 +1,4 @@
-import { Container, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
+import { AsyncFactoryKey, Container, FactoryKey, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
 
 class NumberKey extends TypeKey<number>() { private _: any }
@@ -472,6 +472,48 @@ describe(Container, () => {
         expect(out.a).toEqual(10)
         expect(await out.b()).toEqual('foo')
         expect((await out.c).d).toEqual(['foo', 'b'])
+    })
+
+    test('A FactoryKey returns the same instance per container', () => {
+        class Fac extends FactoryKey({
+            num: NumberKey,
+            str: StringKey,
+        }, ({ num, str }, num2: number, str2: string) => [num + num2, str + str2]) { private _: any }
+        class AsyncFac extends AsyncFactoryKey({
+            bool: BooleanKey,
+        }, async ({ bool }, s1: string, s2: string) => bool ? s1 : s2) { private _: any }
+
+        const parent = Container.create()
+            .provideInstance(NumberKey, 123)
+            .provideInstance(StringKey, 'foo')
+            .provideAsync(BooleanKey, null, async () => true)
+
+        const child = parent.createChild()
+
+        const [sync1, async1] = parent.request([Fac, AsyncFac])
+
+        {
+            const [sync1a, sync1b, async1a, async1b] = parent.request([Fac, Fac, AsyncFac, AsyncFac])
+            expect(sync1).toBe(sync1a)
+            expect(sync1).toBe(sync1b)
+
+            expect(async1).toBe(async1a)
+            expect(async1).toBe(async1b)
+        }
+
+        const [sync2, async2] = child.request([Fac, AsyncFac])
+
+        {
+            const [sync2a, sync2b, async2a, async2b] = child.request([Fac, Fac, AsyncFac, AsyncFac])
+            expect(sync2).toBe(sync2a)
+            expect(sync2).toBe(sync2b)
+
+            expect(async2).toBe(async2a)
+            expect(async2).toBe(async2b)
+        }
+
+        expect(sync1).not.toBe(sync2)
+        expect(async1).not.toBe(async2)
     })
 
     test('README sample', () => {

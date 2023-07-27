@@ -153,7 +153,8 @@ export namespace Inject {
     }
 
     /** @see {@link lazy} */
-    export abstract class GetLazy<K extends DependencyKey> extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+    export abstract class GetLazy<K extends DependencyKey>
+        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
         override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()
@@ -189,7 +190,8 @@ export namespace Inject {
     }
 
     /** @see {@link provider} */
-    export abstract class GetProvider<K extends DependencyKey> extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>> {
+    export abstract class GetProvider<K extends DependencyKey>
+        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
         override init(deps: Initializer<Target<K>> | InjectError): Initializer<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             if (!deps.sync) return new DependencyNotSyncError()

@@ -41,7 +41,7 @@
  */
 
 export { Container } from './Container'
-export { TypeKey, FactoryKey } from './TypeKey'
+export { TypeKey, FactoryKey, AsyncFactoryKey } from './TypeKey'
 export { Inject } from './Inject'
 export { ComputedKey } from './ComputedKey'
 export { Scope, ScopeList, Singleton } from './Scope'

@@ -1,7 +1,7 @@
 
 /** Represents a scope for which certain dependencies are provided. */
 
-import { AbstractClass } from "./_internal"
+import { AbstractClass, isObject } from "./_internal"
 
 const _scopeSymbol = Symbol()
 
@@ -50,11 +50,18 @@ export interface Scope {
  */
 export namespace Scope {
     export function isScope(target: any): target is Scope {
-        return _scopeSymbol in target
+        return isObject(target) && _scopeSymbol in target
     }
 
     /** Class returned by {@link Scope}. Extend this to implement {@link Scope:type}. */
     export interface ScopeClass extends AbstractClass<any, never>, Scope { }
+
+    /**
+     * If a resource is bound to this scope, its instance will be retained only withinh the container that requested it.
+     *
+     * All containers include the Local scope.
+     */
+    export class Local extends Scope() { private _: any }
 }
 
 /**
@@ -64,7 +71,7 @@ export namespace Scope {
  *
  * @group Scoping
  */
-export class Singleton extends Scope() { private _: any; }
+export class Singleton extends Scope() { private _: any }
 
 /**
  * A {@link Scope:type | Scope} or an arbitrarily-nested list of Scopes.
@@ -72,6 +79,8 @@ export class Singleton extends Scope() { private _: any; }
  * @group Scoping
  */
 export type ScopeList<Scp extends Scope = Scope> = Scp | readonly ScopeList<Scp>[]
+
+export type NonEmptyScopeList<Scp extends Scope = Scope> = Scp | readonly [ScopeList<Scp>, ...readonly ScopeList<Scp>[]]
 
 /**
  * @group Scoping
@@ -83,7 +92,7 @@ export namespace ScopeList {
     }
 
     export function isScopeList(target: any): target is ScopeList {
-        if (_scopeSymbol in target) return true
+        if (isObject(target) && _scopeSymbol in target) return true
         if (target instanceof Array) return target.every(isScopeList)
         return false
     }

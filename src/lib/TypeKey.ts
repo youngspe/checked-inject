@@ -3,7 +3,7 @@ import { ComputedKey } from './ComputedKey'
 import { AbstractKey } from './AbstractKey'
 import { Scope, ScopeList } from './Scope'
 import { DependencyKey, Target } from './DependencyKey'
-import { AbstractClass, Class, asMixin } from './_internal'
+import { AbstractClass, Class, asMixin, isObject } from './_internal'
 import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
@@ -201,6 +201,7 @@ export namespace TypeKey {
 
     /** @ignore */
     export function isTypeKey(target: any): target is BaseTypeKey<any> {
+        if (!isObject(target)) return false
         return _typeKeySymbol in target
     }
 
@@ -219,6 +220,7 @@ export namespace TypeKey {
  * @category TypeKey
  */
 export interface FactoryKey<Args extends any[], T> extends TypeKey<(...args: Args) => T> { }
+
 /**
  * A specialized form of {@link TypeKey} that resolves a function of the form
  * `(...args: Args) => T`.
@@ -236,14 +238,19 @@ export function FactoryKey<T, Args extends any[]>(
 ): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, void>>
 
 /**
- * @param deps - A {@link DependencyKey} specifying dependencies of the factory function
+ * @param deps - A {@link DependencyKey} specifying dependencies of the factory function.
+ *  Since the factory returns synchronously, `deps` must resolve synchronously as well.
+ *  If `deps` cannot be resolved synchronously, consider {@link AsyncFactoryKey}.
  * @param fac - A function that accepts the specified dependency followed by {@link Args}
  */
 export function FactoryKey<
     T,
     Args extends any[],
     K extends DependencyKey,
->(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, K>>
+>(deps: K, fac: (deps: Target<K>, ...args: Args) => T): TypeKeyClass<
+    (...args: Args) => T,
+    ComputedKey.WithDepsOf<(...args: Args) => T, Inject.GetProvider<K>>
+>
 
 export function FactoryKey<
     T,
@@ -254,13 +261,87 @@ export function FactoryKey<
         | []
         | [fac: (...args: Args) => T]
         | [deps: K, fac: (deps: Target<K>, ...args: Args) => T]
-): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, K>> {
+): TypeKeyClass<
+    (...args: Args) => T,
+    ComputedKey.WithDepsOf<(...args: Args) => T, Inject.GetProvider<K>>
+> {
     if (args.length == 2) {
         let [deps, fac] = args
-        return TypeKey({ default: Inject.map(deps, d => (...args: Args) => fac(d, ...args)) })
+        return class extends TypeKey({
+            default: Inject.map(Inject.provider(deps), d => (...args: Args) => fac(d(), ...args))
+        }) {
+            static readonly scope?: ScopeList = Scope.Local
+        }
     }
     if (args.length == 1) {
         return TypeKey({ default: Inject.value(args[0]) })
+    }
+    return TypeKey()
+}
+
+/**
+ * Convenience for a {@link TypeKey:type | TypeKey} that resolves an async function of the form
+ * `(...args: Args) => Promise<T>`.
+ *
+ * @group Dependencies
+ * @category TypeKey
+ */
+export type AsyncFactoryKey<Args extends any[], T> = FactoryKey<Args, Promise<T>>
+
+
+/**
+ * A specialized form of {@link TypeKey} that resolves an async function of the form
+ * `(...args: Args) => Promise<T>`.
+ *
+ * @group Dependencies
+ * @category TypeKey
+ */
+export function AsyncFactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...args: Args) => Promise<T>, never>
+
+/**
+ * @param fac - A default value for the async factory function
+ */
+export function AsyncFactoryKey<T, Args extends any[]>(
+    fac: (...args: Args) => T | Promise<T>,
+): TypeKeyClass<(...args: Args) => Promise<T>, ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, void>>
+
+/**
+ * @param deps - A {@link DependencyKey} specifying dependencies of the async factory function
+ * @param fac - An async function that accepts the specified dependency followed by {@link Args}
+ */
+export function AsyncFactoryKey<
+    T,
+    Args extends any[],
+    K extends DependencyKey,
+>(deps: K, fac: (deps: Target<K>, ...args: Args) => T | Promise<T>): TypeKeyClass<
+    (...args: Args) => Promise<T>,
+    ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, Inject.Async<K>>
+>
+
+export function AsyncFactoryKey<
+    T,
+    Args extends any[],
+    K extends DependencyKey,
+>(
+    ...args:
+        | []
+        | [fac: (...args: Args) => T | Promise<T>]
+        | [deps: K, fac: (deps: Target<K>, ...args: Args) => T | Promise<T>]
+): TypeKeyClass<
+    (...args: Args) => Promise<T>,
+    ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, Inject.Async<K>>
+> {
+    if (args.length == 2) {
+        let [deps, fac] = args
+        return class extends TypeKey({
+            default: Inject.map(Inject.async(deps).Provider(), d => (...args: Args) => d().then(d => fac(d, ...args)))
+        }) {
+            static readonly scope?: ScopeList = Scope.Local
+        }
+    }
+    if (args.length == 1) {
+        const fac = args[0]
+        return TypeKey({ default: Inject.value((...args: Args) => Promise.resolve(fac(...args))) })
     }
     return TypeKey()
 }

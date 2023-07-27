@@ -1,6 +1,6 @@
 import { BaseTypeKey, TypeKey } from './TypeKey'
 import { ComputedKey } from './ComputedKey'
-import { Scope, ScopeList, Singleton } from './Scope'
+import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
@@ -32,7 +32,10 @@ interface Entry<T, P extends ProvideGraph, K extends DependencyKey> {
     // This entry has a predefined instance we can return
     | EntryInstance<T>
     | EntryPromise<T>
+    isLocal: boolean
 }
+
+type LocalEntry<T> = { instance: T } | { promise: Promise<T> } | {}
 
 type ExcludeUnspecifiedScope<S> = S extends any ? (
     Scope extends S ? never : S
@@ -70,9 +73,8 @@ type ValueOrPromise<T> = T | Promise<T>
 export class Container<P extends Container.Graph> {
     /** @ignore */
     [unresolved]!: void
-    private readonly _providers: Map<TypeKey<any>, Entry<any, P, any>> = new Map<TypeKey<any>, Entry<any, P, any>>([
-        [Container.Key, { value: { instance: this } }]
-    ])
+    private readonly _providers = new Map<TypeKey<any>, Entry<any, P, any>>()
+    private readonly _localInstances = new Map<TypeKey<any>, LocalEntry<any>>
     private readonly _parent?: Container<any>
     /** @ignore */
     readonly [_depsTag]: ((d: P) => void) | null = null
@@ -133,9 +135,14 @@ export class Container<P extends Container.Graph> {
 
                 const binding = key.defaultInit
                 if (binding != undefined) {
-                    const scope = key.scope && ScopeList.flatten(key.scope)
+                    let scope = key.scope && ScopeList.flatten(key.scope) || []
+                    let isLocal = scope.includes(Scope.Local)
+                    if (isLocal) {
+                        scope = scope.filter(s => s !== Scope.Local)
+                        if (scope.length > 0) { isLocal = false }
+                    }
                     // Use the default provider if available for this key
-                    entry = { value: { binding, scope, sync: true } }
+                    entry = { value: { binding, scope, sync: true }, isLocal }
                     break
                 }
 
@@ -143,11 +150,41 @@ export class Container<P extends Container.Graph> {
             }
         }
 
+        let _localEntry: LocalEntry<T> | undefined
+
+        if (entry.isLocal) {
+            _localEntry = this._localInstances.get(key)
+            if (!_localEntry) {
+                this._localInstances.set(key, _localEntry = {})
+            } else if ('instance' in _localEntry) {
+                const instance = _localEntry.instance
+                return { sync: true, init: () => instance }
+            } else if ('promise' in _localEntry) {
+                const promise = _localEntry.promise
+                return {
+                    sync: false,
+                    init() {
+                        if (_localEntry && 'instance' in _localEntry) return _localEntry.instance
+                        return promise
+                    }
+                }
+            }
+        }
+
+        const localEntry = _localEntry
+
         const value = entry.value
 
         // If this dependency is just an instance, return that
         if ('instance' in value) return { sync: true, init: () => value.instance }
-        if ('promise' in value) return { sync: false, init: () => value.promise }
+        if ('promise' in value) return {
+            sync: false,
+            init() {
+                if ('instance' in entry.value) return entry.value.instance
+                else return value.promise
+            },
+        }
+
         const valueScope = value.scope?.length ? value.scope : undefined
 
         let dependencyContainer: Container<any> = this
@@ -167,7 +204,7 @@ export class Container<P extends Container.Graph> {
                     // if the provider was defined in an ancestor of the container with this scope, we want to make sure we
                     // don't store the instance in the ancestor.
                     // do this by creating a new Entry so changes to value don't affect the original entry.value
-                    entry = { value }
+                    entry = { value, isLocal: entry.isLocal }
                     dependencyContainer._setKeyProvider(key, entry)
                     break
                 }
@@ -180,10 +217,42 @@ export class Container<P extends Container.Graph> {
         const initializer = value.binding.init(depsResult)
 
         if (initializer instanceof InjectError) return new DependencyFailedError(initializer)
-        if (!valueScope) return value.sync ? initializer : {
-            init: () => initializer.init(),
-            sync: false,
-        } as Initializer<T>
+        if (!valueScope) {
+            let init: Initializer<T> | null = initializer
+            if (localEntry) return {
+                init() {
+                    try {
+                        if ('instance' in localEntry) {
+                            return localEntry.instance
+                        } else if ('promise' in localEntry) {
+                            return localEntry.promise
+                        } else {
+                            const output = init!.init()
+                            const initSync = init!.sync
+                            if (!initSync && isPromise(output)) {
+                                const local = localEntry as { promise?: Promise<T> }
+                                local.promise = output
+                                output.then(x => {
+                                    delete local.promise;
+                                    (localEntry as any).instance = x
+                                })
+                            } else {
+                                const local = localEntry as { instance: T }
+                                local.instance = output as T
+                            }
+                            return output
+                        }
+                    } finally {
+                        init = null
+                    }
+                },
+                get sync() { return 'instance' in localEntry || initializer.sync },
+            } as Initializer<T>
+            return value.sync ? initializer : {
+                init: () => initializer.init(),
+                sync: false,
+            } as Initializer<T>
+        }
         let init = nullable(initializer)
 
         const provider: Initializer.Base<T> = {
@@ -192,9 +261,10 @@ export class Container<P extends Container.Graph> {
                     if ('instance' in entry.value) return entry.value.instance
                     if ('promise' in entry.value) return entry.value.promise
 
+                    const initSync = init?.sync
                     // Assuming entry won't change from 'instance' or 'promise' to 'binding', init should be defined at this point
                     let output = init!.init()
-                    if (!this.sync && isPromise(output)) {
+                    if (!initSync && isPromise(output)) {
                         entry.value = { promise: output }
                         output.then(x => {
                             this.sync = true
@@ -300,7 +370,7 @@ export class Container<P extends Container.Graph> {
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     private _provide<
         K extends TypeKey<any> | InjectableClass<any>,
-        SrcK extends DependencyKey = undefined,
+        SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
         S extends Scope = never,
@@ -322,10 +392,17 @@ export class Container<P extends Container.Graph> {
         const hasScopeArg = provideScope != undefined
 
         let scope: Scope[] | undefined = undefined
+        let isLocal = false
         if (keyScope || provideScope) {
             scope = ScopeList.flatten([keyScope ?? [], provideScope ?? []])
+            if (scope.includes(Scope.Local)) {
+                isLocal = true
+                scope = scope.filter(s => s !== Scope.Local)
+            }
             if (scope.length == 0) {
                 scope = undefined
+            } else {
+                isLocal = false
             }
         }
 
@@ -341,13 +418,15 @@ export class Container<P extends Container.Graph> {
                     binding: Inject.map(deps, init),
                     scope,
                     sync,
-                }
+                },
+                isLocal,
             }
         } else {
             const binding = args[args.length - 1] as ComputedKey<T, SrcK>
             if (binding instanceof Inject.Value) {
                 entry = {
-                    value: { instance: binding.instance }
+                    value: { instance: binding.instance },
+                    isLocal: false,
                 }
             } else {
                 entry = {
@@ -355,7 +434,8 @@ export class Container<P extends Container.Graph> {
                         binding,
                         scope,
                         sync,
-                    }
+                    },
+                    isLocal,
                 }
             }
         }
@@ -419,14 +499,14 @@ export class Container<P extends Container.Graph> {
      */
     provide<
         K extends TypeKey<any> | InjectableClass<any>,
-        SrcK extends DependencyKey = undefined,
+        SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
         S extends Scope = never,
     >(
         key: K,
         ...args: [
-            ...scope: Opt<[scope: ScopeList<S>]>,
+            ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
             ...init:
             | [init: ComputedKey<Target<K>, any, D, Sync, P>]
             | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
@@ -475,13 +555,13 @@ export class Container<P extends Container.Graph> {
      */
     provideAsync<
         K extends TypeKey<any> | InjectableClass<any>,
-        SrcK extends DependencyKey = undefined,
+        SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         S extends Scope = never,
     >(
         key: K,
         ...args: [
-            ...scope: Opt<[scope: ScopeList<S>]>,
+            ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
             ...init:
             | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
             | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
@@ -506,7 +586,7 @@ export class Container<P extends Container.Graph> {
     > {
         type T = Target<K>
         let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
-        this._setKeyProvider(_key, { value: { instance } })
+        this._setKeyProvider(_key, { value: { instance }, isLocal: false })
         return this as any
     }
 
@@ -861,6 +941,7 @@ export namespace Container {
     */
     export type DefaultGraph<S extends Scope = never> = FlatGraph<
         | DepPair<typeof Singleton, never>
+        | DepPair<typeof Scope.Local, never>
         | DepPair<typeof Container.Key, never>
         | DepPair<IsSync<typeof Container.Key>, never>
         | (S extends any ? DepPair<S, never> : never)
@@ -879,14 +960,14 @@ export namespace Container {
          */
         provide<
             K extends TypeKey<any> | InjectableClass<any>,
-            SrcK extends DependencyKey = undefined,
+            SrcK extends DependencyKey = never,
             D extends Dependency = DepsOf<SrcK>,
             Sync extends Dependency = RequireSync<D>,
             S extends Scope = never,
         >(
             key: K,
             ...args: [
-                ...scope: Opt<[scope: ScopeList<S>]>,
+                ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
                 ...init:
                 | [init: ComputedKey<Target<K>, any, D, Sync, P>]
                 | [deps: SrcK, init: (deps: Target<SrcK, P>) => Target<K>]
@@ -904,13 +985,13 @@ export namespace Container {
          */
         provideAsync<
             K extends TypeKey<any> | InjectableClass<any>,
-            SrcK extends DependencyKey = undefined,
+            SrcK extends DependencyKey = never,
             D extends Dependency = DepsOf<SrcK>,
             S extends Scope = never,
         >(
             key: K,
             ...args: [
-                ...scope: Opt<[scope: ScopeList<S>]>,
+                ...scope: Opt<[scope: NonEmptyScopeList<S>]>,
                 ...init:
                 | [init: ComputedKey<ValueOrPromise<Target<K>>, any, D, any, P>]
                 | [deps: SrcK, init: (deps: Target<SrcK, P>) => ValueOrPromise<Target<K>>]
@@ -954,9 +1035,6 @@ export namespace Container {
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
     }
 }
-
-type CannotRequest<G extends Container.Graph, K extends DependencyKey, Sync extends Dependency = IsSyncDepsOf<K>>
-    = CanRequest<G, K, Sync> extends infer C ? (unknown extends C ? never : C) : never
 
 interface Invariant<in out T> { }
 
