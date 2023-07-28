@@ -1,7 +1,7 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, ToCyclic, Missing } from "./Dependency"
+import { Dependency, IsSync, FailedDependency, CyclicDependency, ToCyclic, Missing, SubcomponentResolve } from "./Dependency"
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from "./DependencyKey"
 import { InjectableClass } from "./InjectableClass"
-import { ChildGraph, DepPair, FlatGraph, GraphPairs, ProvideGraph, WithScope } from "./ProvideGraph"
+import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from "./ProvideGraph"
 import { Scope } from "./Scope"
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from "./TypeKey"
 
@@ -86,6 +86,7 @@ type _DepsForKeyStep<
     K extends Dependency,
 > =
     Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
+    K extends SubcomponentResolve<infer GSub, infer D> ? DepsForKey<Merge<P, GSub>, D> :
     K extends AllKeys<P> ? DepsForKeyTransitive<P, K> :
     DepsForKeyFallback<P, K>
 

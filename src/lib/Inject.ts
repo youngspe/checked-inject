@@ -6,7 +6,7 @@ import { Initializer, maybePromiseThen } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
 import { TypeKey, FactoryKey } from './TypeKey'
 import { Injectable } from './InjectableClass'
-import { ToCyclic } from './Dependency'
+import { SubcomponentResolve, ToCyclic } from './Dependency'
 
 /**
  * Implementations of {@link ComputedKey} for customizing resource injections.
@@ -367,6 +367,13 @@ export namespace Inject {
         constructor(f: (ct: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<G>) {
             super(Container.Key, ct => (...args) => f(ct.createChild(), ...args))
         }
+
+        /**
+         * Requests a function that accepts {@link Args} and returns the resource specified by {@link key}.
+         */
+        Resolve<K extends DependencyKey>(key: K): SubcomponentDefinition.Resolver<K, Args, G> {
+            return new SubcomponentDefinition.Resolver(this, key)
+        }
     }
 
     class _SubcomponentDefinition<
@@ -422,5 +429,33 @@ export namespace Inject {
         setup: (ct: Container<ChildGraph<FlatGraph<never>, never>>, ...args: Args) => Container<G>,
     ): SubcomponentDefinition<Args, G> {
         return new _SubcomponentDefinition(setup)
+    }
+
+    export namespace SubcomponentDefinition {
+        /** @see {@link SubcomponentDefinition.Resolve} */
+        export class Resolver<
+            K extends DependencyKey,
+            Args extends any[],
+            G extends Container.Graph,
+        > extends BaseComputedKey<
+            (...args: Args) => Target<K>,
+            DependencyKey.Of<Container.Subcomponent<Args, G>>,
+            SubcomponentResolve<G, DepsOf<K> | IsSyncDepsOf<K>>,
+            never
+        > {
+            readonly key: K
+
+            constructor(inner: DependencyKey.Of<Container.Subcomponent<Args, G>>, key: K) {
+                super(inner)
+                this.key = key
+            }
+
+            init(
+                deps: Initializer<Container.Subcomponent<Args, G>> | InjectError,
+            ): Initializer<(...args: Args) => Target<K>> | InjectError {
+                if (deps instanceof InjectError) return deps
+                return Initializer.chain(deps, sub => ({ value: (...args) => sub(...args).requestUnchecked(this.key) }))
+            }
+        }
     }
 }

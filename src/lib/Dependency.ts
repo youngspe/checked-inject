@@ -3,6 +3,7 @@ import { NotDistinct, UnableToResolve, UnableToResolveIsSync } from './Dependenc
 import { PrivateConstruct } from './_internal'
 import { BaseTypeKey, TypeKey } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
+import { ProvideGraph } from './ProvideGraph'
 
 /** @ignore */
 export type BaseResource<T = any> = BaseTypeKey<T> | InjectableClass<T>
@@ -56,6 +57,13 @@ export abstract class Missing<K extends Dependency> {
     [_scopedSymbol]!: [K]
 }
 
+const _subcomponentSymbol = Symbol()
+
+/** @ignore */
+export abstract class SubcomponentResolve<G extends ProvideGraph, D extends Dependency> {
+    [_subcomponentSymbol]!: [G, D]
+}
+
 /**
  * A low-level dependency for a {@link DependencyKey}.
  * Generally, you won't need to interact with this type much.
@@ -69,6 +77,7 @@ export type Dependency =
     | IsSync<any>
     | PrivateConstruct
     | CyclicDependency<any, any>
+    | SubcomponentResolve<any, any>
     | FailedDependency
 
 export type FailedDependency =

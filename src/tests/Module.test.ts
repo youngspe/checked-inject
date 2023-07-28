@@ -1,4 +1,4 @@
-import { Inject, Module, TypeKey } from '../lib'
+import { Inject, Module, Scope, Target, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
 import { sleep } from './utils'
 
@@ -96,6 +96,38 @@ describe(Module, () => {
             fooService: new FooService(),
             barService: new BarService(),
             user: new User('alice', '123'),
+        })
+    })
+
+    test('SubcomponentDefinition.Resolve()', () => {
+        class UserScope extends Scope() { private _: any }
+        class Keys {
+            static UserId = class UserId extends TypeKey<string>() { private _: any }
+            static UserName = class UserName extends TypeKey<string>() { private _: any }
+            static UserInfo = class UserInfo extends TypeKey<{ userName: string, userId: string }>() { private _: any }
+            static Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
+                .addScope(UserScope)
+                .provideInstance(this.UserName, userName)
+                .provideInstance(this.UserId, userId)
+            )
+            static UserInfo1 = Inject.map(this.Subcomponent.Resolve(this.UserInfo), f => f('alice', '123'))
+            static UserInfo2 = class UserInfo extends TypeKey<Target<typeof this.UserInfo>>() { private _: any }
+        }
+
+        const UserModule = Module(ct => ct
+            .provide(Keys.UserInfo2, Keys.Subcomponent.Resolve(Keys.UserInfo), f => f('bob', '456'))
+        )
+
+        const MyModule = Module(UserModule, ct => ct
+            .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
+        )
+
+        MyModule.inject({
+            out1: Keys.UserInfo1,
+            out2: Keys.UserInfo2
+        }, ({ out1, out2 }) => {
+            expect(out1).toEqual({ userName: 'alice', userId: '123' })
+            expect(out2).toEqual({ userName: 'bob', userId: '456' })
         })
     })
 })
