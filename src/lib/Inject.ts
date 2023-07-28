@@ -6,6 +6,7 @@ import { Initializer, maybePromiseThen } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
 import { TypeKey, FactoryKey } from './TypeKey'
 import { Injectable } from './InjectableClass'
+import { ToCyclic } from './Dependency'
 
 /**
  * Implementations of {@link ComputedKey} for customizing resource injections.
@@ -273,6 +274,27 @@ export namespace Inject {
      */
     export function unchecked<K extends DependencyKey>(src: K): Unchecked<K> {
         return new _Unchecked(src)
+    }
+
+    /** @see {@link cyclic} */
+    export abstract class Cyclic<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, ToCyclic<DepsOf<K>>, IsSyncDepsOf<K>> {
+        override init(deps: Initializer<Target<K>> | InjectError) {
+            return deps
+        }
+    }
+
+    class _Cyclic<K extends DependencyKey> extends Cyclic<K>{ }
+
+    /**
+     * Prevents dependency cycles on {@link src} from causing a compilation error.
+     *
+     * @see
+     *  {@link TypeKey.Cyclic | TypeKey.Cyclic},
+     *  {@link ComputedKey.Cyclic | ComputedKey.Cyclic},
+     *  {@link Injectable.Cyclic | Injectable.Cyclic}
+     */
+    export function cyclic<K extends DependencyKey>(src: K): Cyclic<K> {
+        return new _Cyclic(src)
     }
 
     /** @see {@link build} */

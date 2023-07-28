@@ -49,6 +49,16 @@ export abstract class AbstractKey {
     }
 
     /**
+     * Prevents dependency cycles on {@link src} from causing a compilation error.
+     *
+     * @see {@link Inject.cyclic}
+     * @group DependencyKey Operators
+     */
+    Cyclic<Th extends DependencyKey>(this: Th): Inject.Cyclic<Th> {
+        return Inject.cyclic(this)
+    }
+
+    /**
      * Resolves to a {@link Promise} of the target value, allowing a synchronous resource
      * to depend on an asynchronous one.
      *

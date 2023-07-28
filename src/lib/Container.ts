@@ -3,8 +3,8 @@ import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
-import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
-import { Target, DepsOf, DependencyKey, IsSyncDepsOf } from './DependencyKey'
+import { BaseResource, Dependency, IsSync, NotSync, RequireSync } from './Dependency'
+import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey } from './DependencyKey'
 import { Initializer, isPromise, nullable } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
@@ -56,7 +56,7 @@ type PairForProvide<K extends Dependency, D extends Dependency, S extends Scope>
         & ([Scp] extends [never] ? unknown : WithScope<Scp>)
     ) : never
 
-type PairForProvideIsSync<K extends BaseTypeKey | InjectableClass, Sync extends Dependency, S extends Scope> =
+type PairForProvideIsSync<K extends BaseResource, Sync extends Dependency, S extends Scope> =
     [CombinedScope<K, S>] extends [infer Scp extends Scope] ? (
         [Dependency] extends [Sync] ? never :
         & DepPair<IsSync<K>, Sync>
@@ -359,7 +359,7 @@ export class Container<P extends Container.Graph> {
 
     /** Registers `key` to provide the value returned by `init`, with the dependencies defined by `deps`. */
     private _provide<
-        K extends TypeKey<any> | InjectableClass<any>,
+        K extends ResourceKey,
         SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
@@ -489,7 +489,7 @@ export class Container<P extends Container.Graph> {
      * @group Provide Methods
      */
     provide<
-        K extends TypeKey<any> | InjectableClass<any>,
+        K extends ResourceKey,
         SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         Sync extends Dependency = RequireSync<D>,
@@ -546,7 +546,7 @@ export class Container<P extends Container.Graph> {
      */
     provideAsync<
         T,
-        K extends TypeKey<Awaited<T>> | InjectableClass<Awaited<T>>,
+        K extends ResourceKey<Awaited<T>>,
         SrcK extends DependencyKey = never,
         D extends Dependency = DepsOf<SrcK>,
         S extends Scope = never,
@@ -573,7 +573,7 @@ export class Container<P extends Container.Graph> {
      *
      * @group Provide Methods
      */
-    provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Container<
+    provideInstance<K extends ResourceKey>(key: K, instance: Target<K>): Container<
         Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
     > {
         type T = Target<K>
@@ -594,7 +594,7 @@ export class Container<P extends Container.Graph> {
      * @group Provide Methods
      */
     bind<
-        K extends TypeKey | InjectableClass,
+        K extends ResourceKey,
         Src extends DependencyKey.Of<Target<K>>,
     >(key: K, src: Src): Container<Provide<
         P,
@@ -951,7 +951,7 @@ export namespace Container {
          * @see {@link Container.provide}
          */
         provide<
-            K extends TypeKey<any> | InjectableClass<any>,
+            K extends ResourceKey,
             SrcK extends DependencyKey = never,
             D extends Dependency = DepsOf<SrcK>,
             Sync extends Dependency = RequireSync<D>,
@@ -977,7 +977,7 @@ export namespace Container {
          */
         provideAsync<
             T,
-            K extends TypeKey<Awaited<T>> | InjectableClass<Awaited<T>>,
+            K extends ResourceKey<Awaited<T>>,
             SrcK extends DependencyKey = never,
             D extends Dependency = DepsOf<SrcK>,
             S extends Scope = never,
@@ -996,7 +996,7 @@ export namespace Container {
          * {@inheritDoc Container.provideInstance}
          * @see {@link Container.provideInstance}
          */
-        provideInstance<K extends TypeKey<any> | InjectableClass<any>>(key: K, instance: Target<K>): Builder<
+        provideInstance<K extends ResourceKey>(key: K, instance: Target<K>): Builder<
             Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
         >
 
@@ -1005,7 +1005,7 @@ export namespace Container {
          * @see {@link Container.bind}
          */
         bind<
-            K extends TypeKey | InjectableClass,
+            K extends ResourceKey,
             Src extends DependencyKey.Of<Target<K>>,
         >(key: K, src: Src): Builder<Provide<
             P,
@@ -1062,7 +1062,7 @@ export function _assertContainer<G extends Container.Graph>(ct: Container<G> | M
  * @ignore
  * @internal
  */
-export function _because<K, Sync extends TypeKey | InjectableClass = never>(): Invariant<RequestFailed<
+export function _because<K, Sync extends ResourceKey = never>(): Invariant<RequestFailed<
     | K
-    | (Sync extends infer S extends TypeKey | InjectableClass ? NotSync<S> : never)
+    | (Sync extends infer S extends ResourceKey ? NotSync<S> : never)
 >> | undefined { return undefined }

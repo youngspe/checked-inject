@@ -43,15 +43,14 @@ describe(Container, () => {
 
     test('inject structured dependencies', () => {
         const target = Container.create()
-
-        const out = target
             .provideInstance(NumberKey, 10)
             .provide(StringKey, {}, () => 'foo')
             .provide(ArrayKey, {
                 a: NumberKey,
                 b: { c: StringKey },
             }, ({ a, b: { c } }) => [a.toString(), c])
-            .request(ArrayKey)
+
+        const out = target.request(ArrayKey)
 
         expect(out).toEqual(['10', 'foo'])
     })
@@ -551,6 +550,29 @@ describe(Container, () => {
         const MyModule = Module(ct => ct
             .provide(CustomKey1, Inject.from({ a: CustomKey2 }))
             .provide(CustomKey2, Inject.from({ b: CustomKey1.Unchecked().Lazy() }))
+        )
+
+        MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {
+            expect(c1).toBe(c2.b())
+        })
+
+        MyModule.inject([CustomKey2, CustomKey1] as const, ([c2, c1]) => {
+            expect(c1).toBe(c2.b())
+        })
+    })
+
+    test('cyclic with Cyclic', () => {
+        interface Custom1 { a: Custom2 }
+        interface Custom2 { b: () => Custom1 }
+        class CustomKey1 extends TypeKey<Custom1>() {
+            private _: any
+            static scope = Singleton
+        }
+        class CustomKey2 extends TypeKey<Custom2>() { private _: any }
+
+        const MyModule = Module(ct => ct
+            .provide(CustomKey1, Inject.from({ a: CustomKey2 }))
+            .provide(CustomKey2, Inject.from({ b: CustomKey1.Cyclic().Lazy() }))
         )
 
         MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {
