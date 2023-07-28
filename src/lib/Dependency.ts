@@ -47,6 +47,7 @@ export type ToCyclic<D extends Dependency, C extends BaseResource = Extract<D, B
     | (
         D extends BaseResource ? never :
         D extends CyclicDependency<infer K, infer C2> ? _ToCyclic<Exclude<K, C>, C | C2> :
+        D extends SubcomponentResolve<infer G, infer K> ? SubcomponentResolve<G, ToCyclic<K>> :
         D
     )
 
