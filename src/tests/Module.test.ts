@@ -101,25 +101,25 @@ describe(Module, () => {
 
     test('SubcomponentDefinition.Resolve()', () => {
         class UserScope extends Scope() { private _: any }
-        class Keys {
-            static UserId = class UserId extends TypeKey<string>() { private _: any }
-            static UserName = class UserName extends TypeKey<string>() { private _: any }
-            static UserInfo = class UserInfo extends TypeKey<{ userName: string, userId: string }>() { private _: any }
-            static Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
-                .addScope(UserScope)
-                .provideInstance(this.UserName, userName)
-                .provideInstance(this.UserId, userId)
-            )
-            static UserInfo1 = Inject.map(this.Subcomponent.Resolve(this.UserInfo), f => f('alice', '123'))
-            static UserInfo2 = class UserInfo extends TypeKey<Target<typeof this.UserInfo>>() { private _: any }
-        }
+
+        function Keys() { }
+        Keys.Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
+            .addScope(UserScope)
+            .provideInstance(Keys.UserName, userName)
+            .provideInstance(Keys.UserId, userId)
+        )
+        Keys.UserId = class extends TypeKey<string>() { private _: any }
+        Keys.UserName = class extends TypeKey<string>() { private _: any }
+        Keys.UserInfo = class extends TypeKey<{ userName: string, userId: string }>() { private _: any }
+        Keys.UserInfo2 = class extends TypeKey<Target<typeof Keys.UserInfo>>() { private _: any }
+        Keys.UserInfo1 = Inject.map(Keys.Subcomponent.Resolve(Keys.UserInfo), f => f('alice', '123'))
 
         const UserModule = Module(ct => ct
             .provide(Keys.UserInfo2, Keys.Subcomponent.Resolve(Keys.UserInfo), f => f('bob', '456'))
         )
 
         const MyModule = Module(UserModule, ct => ct
-            .provide(Keys.UserInfo, UserScope, { userId: Keys.UserId, userName: Keys.UserName }, x => x)
+            .provide(Keys.UserInfo, UserScope, Inject.from({ userId: Keys.UserId, userName: Keys.UserName }))
         )
 
         MyModule.inject({
@@ -128,6 +128,53 @@ describe(Module, () => {
         }, ({ out1, out2 }) => {
             expect(out1).toEqual({ userName: 'alice', userId: '123' })
             expect(out2).toEqual({ userName: 'bob', userId: '456' })
+        })
+    })
+
+    test('SubcomponentDefinition.Resolve() with cycles', () => {
+        class UserScope extends Scope() { private _: any }
+        interface UserInfo { userName: string, userId: string }
+
+        function Keys() { }
+        Keys.Subcomponent = Inject.subcomponent((ct, userName: string, userId: string) => ct
+            .addScope(UserScope)
+            .provideInstance(Keys.UserName, userName)
+            .provideInstance(Keys.UserId, userId)
+        )
+        Keys.UserId = class extends TypeKey<string>() { private _: any }
+        Keys.UserName = class extends TypeKey<string>() { private _: any }
+        Keys.UserInfo = class extends TypeKey<UserInfo>() { private _: any }
+        Keys.UserInfo1 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
+        Keys.UserInfo2 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
+
+        const UserModule = Module(ct => ct
+            .provide(Keys.UserInfo1, Keys.Subcomponent.Resolve({
+                a: Keys.UserInfo,
+                b: Keys.UserInfo1.Cyclic().Lazy(),
+            }), f => {
+                const { a, b } = f('alice', '123')
+                return { a, get b() { return b().a } }
+            })
+            .provide(Keys.UserInfo2, UserScope, {
+                a: Keys.UserInfo,
+                b: Keys.UserInfo2.Cyclic().Lazy(),
+            }, ({ a, b }) => ({ a, get b() { return b().a } })
+            )
+        )
+
+        const MyModule = Module(UserModule, ct => ct
+            .provide(Keys.UserInfo, UserScope, Inject.from({ userId: Keys.UserId, userName: Keys.UserName }))
+        )
+
+        MyModule.inject({
+            out1: Keys.UserInfo1,
+            out2: Keys.Subcomponent.Resolve(Keys.UserInfo2).Build('bob', '456'),
+        }, ({ out1: { a: a1, b: b1 }, out2: { a: a2, b: b2 } }) => {
+            expect(a1).toEqual({ userName: 'alice', userId: '123' })
+            expect(b1).toEqual(a1)
+
+            expect(a2).toEqual({ userName: 'bob', userId: '456' })
+            expect(b2).toBe(a2)
         })
     })
 })

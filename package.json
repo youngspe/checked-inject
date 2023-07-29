@@ -1,13 +1,14 @@
 {
   "name": "checked-inject",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "npm run build && jest",
-    "doc": "typedoc"
+    "doc": "typedoc",
+    "prepublish": "npm run build"
   },
   "repository": {
     "type": "git",

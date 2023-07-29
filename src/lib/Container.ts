@@ -1,11 +1,11 @@
-import { BaseTypeKey, TypeKey } from './TypeKey'
+import { TypeKey } from './TypeKey'
 import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { BaseResource, Dependency, IsSync, NotSync, RequireSync } from './Dependency'
 import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey } from './DependencyKey'
-import { Initializer, isPromise, nullable } from './_internal'
+import { Initializer } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, RequestFailed, unresolved } from './CanRequest'
@@ -613,9 +613,7 @@ export class Container<P extends Container.Graph> {
      *
      * @group Provide Methods
      */
-    addScope<S extends Scope>(...scope: S[]): Container<
-        Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
-    > {
+    addScope<S extends Scope>(...scope: S[]): Container<Provide<P, S extends any ? DepPair<S, never> : never>> {
         this.scopes.push(...scope)
         return this as any
     }
@@ -1017,9 +1015,7 @@ export namespace Container {
          * {@inheritDoc Container.addScope}
          * @see {@link Container.addScope}
          */
-        addScope<S extends Scope>(...scope: S[]): Builder<
-            Merge<P, ProvideGraph<S extends any ? DepPair<S, never> : never>>
-        >
+        addScope<S extends Scope>(...scope: S[]): Builder<Provide<P, S extends any ? DepPair<S, never> : never>>
 
         /**
          * {@inheritDoc Container.apply}
