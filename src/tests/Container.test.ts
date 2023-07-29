@@ -1,4 +1,4 @@
-import { AsyncFactoryKey, Container, FactoryKey, Inject, Module, Scope, Singleton, Target, TypeKey } from '../lib'
+import { AsyncFactoryKey, Container, FactoryKey, Inject, LazyKey, Module, Scope, Singleton, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
 
 class NumberKey extends TypeKey<number>() { private _: any }
@@ -234,7 +234,7 @@ describe(Container, () => {
         }) { private _: any }
         // Singleton
         class CustomKey2 extends TypeKey({
-            default: Inject.map({ str: StringKey }, ({ str }) => ({ b: str })),
+            default: () => Inject.map({ str: StringKey }, ({ str }) => ({ b: str })),
         }) {
             private _: any
             static readonly scope = Singleton
@@ -474,10 +474,10 @@ describe(Container, () => {
     })
 
     test('A FactoryKey returns the same instance per container', () => {
-        class Fac extends FactoryKey({
+        class Fac extends FactoryKey(LazyKey(() => ({
             num: NumberKey,
             str: StringKey,
-        }, ({ num, str }, num2: number, str2: string) => [num + num2, str + str2]) { private _: any }
+        })), ({ num, str }, num2: number, str2: string) => [num + num2, str + str2]) { private _: any }
         class AsyncFac extends AsyncFactoryKey({
             bool: BooleanKey,
         }, async ({ bool }, s1: string, s2: string) => bool ? s1 : s2) { private _: any }

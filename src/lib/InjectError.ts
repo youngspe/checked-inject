@@ -6,7 +6,7 @@ import { DependencyKey } from './DependencyKey'
 /** Represents a possible error when resolving a dependency. */
 export abstract class InjectError extends Error { }
 
-/** Error thrown when requeting a TypeKey whose value was not provided. */
+/** Error thrown when requesting a TypeKey whose value was not provided. */
 export class TypeKeyNotProvidedError extends InjectError {
     readonly key: TypeKey
     constructor(key: TypeKey) {
@@ -15,7 +15,7 @@ export class TypeKeyNotProvidedError extends InjectError {
     }
 }
 
-/** Error thrown when requeting a TypeKey whose value was not provided. */
+/** Error thrown when requesting a TypeKey whose value was not provided. */
 export class DependencyNotSyncError extends InjectError {
     readonly key?: DependencyKey
     constructor(key?: DependencyKey) {

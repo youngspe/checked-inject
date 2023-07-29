@@ -137,7 +137,11 @@ export class Container<P extends Container.Graph> {
     }
 
     // Returns a provider for the given `TypeKey`, or an error if it or any of its transitive dependencies are not provided.
-    private _getTypeKeyProvider<T, K extends DependencyKey = any>(key: TypeKey<T>): Initializer<T> | InjectError {
+    private _getTypeKeyProvider<
+        T,
+        K extends DependencyKey = any,
+        Def extends ComputedKey<T> = any,
+    >(key: TypeKey<T, Def>): Initializer<T> | InjectError {
         let entry: Entry<T, P, K>
 
         // Traverse this container and its parents until we find an entry
@@ -150,8 +154,9 @@ export class Container<P extends Container.Graph> {
             }
             entryContainer = entryContainer._parent
             if (entryContainer == undefined) {
+                let binding = key.defaultInit
+                if (typeof binding == 'function') { binding = binding() }
 
-                const binding = key.defaultInit
                 if (binding != undefined) {
                     let scope = key.scope && ScopeList.flatten(key.scope) || []
                     let isLocal = scope.includes(Scope.Local)

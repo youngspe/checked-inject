@@ -33,7 +33,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> exte
     /** @ignore prevent a TypeKey from being an InjectableClass */
     readonly inject: null
     /** @ignore */
-    readonly defaultInit?: Def
+    readonly defaultInit?: Def | (() => Def)
 }
 
 /**
@@ -196,7 +196,7 @@ export namespace TypeKey {
         /** A name for this TypeKey, largely for use in error messages. */
         name?: string
         /** A {@link ComputedKey} providing a default value for this TypeKey if none is provided to the {@link Container}. */
-        default?: Def
+        default?: Def | (() => Def)
     }
 
     /** @ignore */

@@ -3,7 +3,7 @@ import { InjectError } from './InjectError'
 import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, Target, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
-import { Initializer as _Initializer } from './_internal'
+import { Initializer } from './_internal'
 import { Inject } from './Inject'
 
 declare const _computedKeySymbol: unique symbol
@@ -24,8 +24,8 @@ export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
  * @category ComputedKey
  */
 export abstract class ComputedKey<
-    out T = any,
-    out K extends DependencyKey = any,
+    T = any,
+    K extends DependencyKey = any,
     D extends Dependency = any,
     Sync extends Dependency = any,
     P extends Container.Graph = any,
@@ -33,19 +33,10 @@ export abstract class ComputedKey<
     /** @ignore */
     readonly [_computedKeySymbol]!: readonly [T, D, Sync] | null
     /** This key determines the dependencies that will be passed to `this.init()`. */
-    readonly inner: K
-
-    /**
-     * @ignore
-     * @internal
-     */
-    constructor(inner: K) {
-        super()
-        this.inner = inner
-    }
+    abstract readonly inner: K
 
     /** Given a provider of {@link K} or an error, return a provider of {@link T} or an error. */
-    abstract init(deps: ComputedKey.Initializer<Target<K, P>> | InjectError): ComputedKey.Initializer<T> | InjectError
+    abstract init(deps: Initializer<Target<K, P>> | InjectError): Initializer<T> | InjectError
 }
 
 /**
@@ -58,7 +49,18 @@ export abstract class BaseComputedKey<
     D extends Dependency = DepsOf<K>,
     Sync extends Dependency = IsSyncDepsOf<K>,
     P extends Container.Graph = never,
-> extends ComputedKey<T, K, D, Sync, P> { }
+> extends ComputedKey<T, K, D, Sync, P> {
+    readonly inner: K
+
+    /**
+     * @ignore
+     * @internal
+     */
+    constructor(inner: K) {
+        super()
+        this.inner = inner
+    }
+}
 
 /**
  * @ignore
@@ -67,7 +69,56 @@ export abstract class BaseComputedKey<
  */
 export namespace ComputedKey {
     /** @ignore */
-    export import Initializer = _Initializer
-    /** @ignore */
     export type WithDepsOf<T, K extends DependencyKey> = ComputedKey<T, any, DepsOf<K>, IsSyncDepsOf<K>>
 }
+
+class _LazyKey<K extends DependencyKey> extends ComputedKey<
+    Target<K>,
+    K,
+    DepsOf<K>,
+    IsSyncDepsOf<K>
+> {
+    private _f: (() => K) | null
+    private _inner: K | null = null
+
+    override get inner() {
+        if (this._f) {
+            this._inner = this._f()
+            this._f = null
+        }
+        return this._inner!
+    }
+
+    constructor(f: () => K) {
+        super()
+        this._f = f
+    }
+
+    init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer<Target<K>> {
+        return deps
+    }
+}
+
+/**
+ * Resolves the dependencies specified by the return value of {@link src}.
+ * Useful when depending on a class or TypeKey that hasn't yet been declared.
+ *
+ * @example
+ *
+ * In this example, `LazyKey(() => NameKey)`
+ * is necessary because `MyFactory` is declared before `NameKey`:
+ *
+ * ```ts
+ * class MyFactory extends FactoryKey(
+ *   LazyKey(() => NameKey), (name, id: string) => name + id,
+ * ) { private _: any }
+ *
+ * class NameKey extends TypeKey<string>() { private _: any }
+ * ```
+ */
+export function LazyKey<K extends DependencyKey>(src: () => K): LazyKey<K> {
+    return new _LazyKey(src)
+}
+
+/** @see {@link LazyKey} */
+export type LazyKey<K extends DependencyKey> = _LazyKey<K>
