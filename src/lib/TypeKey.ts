@@ -25,7 +25,7 @@ export interface BaseTypeKey<out T = any, Def extends ComputedKey<T> = any> exte
     /** @ignore */
     readonly keyTag?: symbol
     /** The {@link Scope:type | Scope} or {@link ScopeList} to which this `TypeKey` should be bound. */
-    readonly scope?: ScopeList
+    readonly scope?: ScopeList | (() => ScopeList)
     /** The name that will be displayed in exception messages. */
     readonly fullName: string
     /** A class or function returning the target value of this `TypeKey`. */
@@ -270,7 +270,7 @@ export function FactoryKey<
         return class extends TypeKey({
             default: Inject.map(Inject.provider(deps), d => (...args: Args) => fac(d(), ...args))
         }) {
-            static readonly scope?: ScopeList = Scope.Local
+            static readonly scope?: ScopeList | (() => ScopeList) = Scope.Local
         }
     }
     if (args.length == 1) {
@@ -336,7 +336,7 @@ export function AsyncFactoryKey<
         return class extends TypeKey({
             default: Inject.map(Inject.async(deps).Provider(), d => (...args: Args) => d().then(d => fac(d, ...args)))
         }) {
-            static readonly scope?: ScopeList = Scope.Local
+            static readonly scope?: ScopeList | (() => ScopeList) = Scope.Local
         }
     }
     if (args.length == 1) {

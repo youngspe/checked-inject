@@ -543,7 +543,7 @@ describe(Container, () => {
         interface Custom2 { b: () => Custom1 }
         class CustomKey1 extends TypeKey<Custom1>() {
             private _: any
-            static scope = Singleton
+            static scope = () => Singleton
         }
         class CustomKey2 extends TypeKey<Custom2>() { private _: any }
 

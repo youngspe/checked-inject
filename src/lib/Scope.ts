@@ -87,8 +87,11 @@ export type NonEmptyScopeList<Scp extends Scope = Scope> = Scp | readonly [Scope
  */
 export namespace ScopeList {
     /** Converts a {@link ScopeList} into a flat list of {@link Scope:type | Scope}[] */
-    export function flatten<Scp extends Scope>(scopes: ScopeList<Scp>): Scp[] {
-        return scopes instanceof Array ? scopes.flatMap(flatten) as Scp[] : [scopes]
+    export function flatten<Scp extends Scope>(scopes: ScopeList<Scp> | (() => ScopeList<Scp>) | null | undefined): Scp[] {
+        return (scopes == null) ? [] :
+            (isObject(scopes) && _scopeSymbol in scopes) ? [scopes] :
+                (typeof scopes == 'function') ? flatten(scopes()) :
+                    scopes.flatMap(flatten) as Scp[]
     }
 
     export function isScopeList(target: any): target is ScopeList {

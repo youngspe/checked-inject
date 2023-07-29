@@ -12,7 +12,7 @@ export interface DepPair<out K extends Dependency, D extends Dependency> {
 
 /** @ignore */
 export interface WithScope<Scp extends Scope> {
-    readonly scope: ScopeList<Scp>
+    readonly scope: ScopeList<Scp> | (() => ScopeList<Scp>)
 }
 
 /** @ignore */

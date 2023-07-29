@@ -47,7 +47,7 @@ type ExcludeUnspecifiedScope<S> = S extends any ? (
 
 type CombinedScope<K, S extends Scope> = ExcludeUnspecifiedScope<
     | S
-    | (K extends { scope: infer A extends Scope } ? A : never)
+    | (K extends WithScope<infer A> ? A : never)
 >
 
 type PairForProvide<K extends Dependency, D extends Dependency, S extends Scope> =
@@ -112,7 +112,7 @@ export class Container<P extends Container.Graph> {
      * @group Static Methods
      */
     static create<S extends Scope = never>(options: { scope?: ScopeList<S> } = {}): Container<Container.DefaultGraph<S>> {
-        let { scope = [] } = options
+        let { scope } = options
         let scopeWithSingleton = [Singleton, ...ScopeList.flatten(scope)]
         const newOptions: { scope: Scope[] } = { scope: scopeWithSingleton }
         return new Container(newOptions)
@@ -158,7 +158,7 @@ export class Container<P extends Container.Graph> {
                 if (typeof binding == 'function') { binding = binding() }
 
                 if (binding != undefined) {
-                    let scope = key.scope && ScopeList.flatten(key.scope) || []
+                    let scope = ScopeList.flatten(key.scope)
                     let isLocal = scope.includes(Scope.Local)
                     if (isLocal) {
                         scope = scope.filter(s => s !== Scope.Local)
@@ -285,7 +285,7 @@ export class Container<P extends Container.Graph> {
         return provider
     }
 
-    private _getClassTypKey<T>(cls: InjectableClass<T>): TypeKey<T> {
+    private _getClassTypeKey<T>(cls: InjectableClass<T>): TypeKey<T> {
         const _cls: typeof cls & { [_classTypeKey]?: TypeKey<T> } = cls
         if (!Object.getOwnPropertySymbols(_cls).includes(_classTypeKey)) {
             _cls[_classTypeKey] = class _X extends TypeKey({
@@ -299,7 +299,7 @@ export class Container<P extends Container.Graph> {
     }
 
     private _getClassProvider<T>(cls: InjectableClass<T>): Initializer<T> | InjectError {
-        return this._getTypeKeyProvider(this._getClassTypKey(cls))
+        return this._getTypeKeyProvider(this._getClassTypeKey(cls))
     }
 
     // Returns a provider for the given `DependencyKey`, or an error if any of its transitive dependencies are not provided.
@@ -389,7 +389,7 @@ export class Container<P extends Container.Graph> {
         let scope: Scope[] | undefined = undefined
         let isLocal = false
         if (keyScope || provideScope) {
-            scope = ScopeList.flatten([keyScope ?? [], provideScope ?? []])
+            scope = [...ScopeList.flatten(keyScope), ...ScopeList.flatten(provideScope)]
             if (scope.includes(Scope.Local)) {
                 isLocal = true
                 scope = scope.filter(s => s !== Scope.Local)
@@ -436,7 +436,7 @@ export class Container<P extends Container.Graph> {
             }
         }
 
-        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
+        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
         this._setKeyProvider(_key, entry)
         return this
     }
@@ -582,7 +582,7 @@ export class Container<P extends Container.Graph> {
         Provide<P, DepPair<IsSync<K>, never> | DepPair<K, never>>
     > {
         type T = Target<K>
-        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypKey(key)
+        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
         this._setKeyProvider(_key, { value: { instance: { value: instance } }, isLocal: false })
         return this as any
     }

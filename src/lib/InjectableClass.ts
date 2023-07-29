@@ -33,7 +33,7 @@ export interface InjectableClass<T = any> extends Class<T> {
      * A {@link Scope} or {@link ScopeList} that, if provided, specifies the scope in which an
      * instance of this class will be resolved and stored.
      */
-    readonly scope?: ScopeList
+    readonly scope?: ScopeList | (() => ScopeList)
     /**
      * A {@link ComputedKey} that, if provided, specifies how to resolve this class if no provider was supplied.
      */
@@ -58,7 +58,7 @@ abstract class _Injectable { }
  */
 export abstract class Injectable<T = any> extends asMixin(_Injectable, AbstractKey) {
     /** {@inheritDoc InjectableClass.scope} */
-    readonly scope?: ScopeList
+    readonly scope?: ScopeList | (() => ScopeList)
     /** {@inheritDoc InjectableClass.inject} */
     readonly inject?: ComputedKey<T> | (() => ComputedKey<T>)
 }
