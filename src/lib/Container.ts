@@ -5,7 +5,7 @@ import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { BaseResource, Dependency, IsSync, NotSync, RequireSync } from './Dependency'
 import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey } from './DependencyKey'
-import { Initializer } from './_internal'
+import { Initializer, nameFunction } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
 import { CanRequest, RequestFailed, unresolved } from './CanRequest'
@@ -281,6 +281,7 @@ export class Container<P extends Container.Graph> {
             }
         }
 
+        provider = nameFunction(provider, `provide_${key.fullName}`)
         entry.value = { initializer: provider }
         return provider
     }
@@ -288,12 +289,14 @@ export class Container<P extends Container.Graph> {
     private _getClassTypeKey<T>(cls: InjectableClass<T>): TypeKey<T> {
         const _cls: typeof cls & { [_classTypeKey]?: TypeKey<T> } = cls
         if (!Object.getOwnPropertySymbols(_cls).includes(_classTypeKey)) {
-            _cls[_classTypeKey] = class _X extends TypeKey({
-                of: _cls,
-                default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
-            }) {
-                static readonly scope = _cls.scope
-            }
+            _cls[_classTypeKey] = {
+                [cls.name]: class extends TypeKey({
+                    of: _cls,
+                    default: _cls.inject && (typeof _cls.inject == 'function' ? _cls.inject() : _cls.inject),
+                }) {
+                    static readonly scope = _cls.scope
+                }
+            }[cls.name]
         }
         return _cls[_classTypeKey]!
     }
@@ -348,7 +351,7 @@ export class Container<P extends Container.Graph> {
 
             if (allSync) {
                 for (let prop in refs) {
-                    out[prop] = (refs[prop] as Initializer.Ref<T>).value
+                    out[prop] = (refs[prop] as Initializer.Ref<_T[keyof _T]>).value
                 }
                 return { value: out as T }
             }
@@ -857,7 +860,7 @@ export class Container<P extends Container.Graph> {
      * @group Request Methods
      */
     build<
-        K extends DependencyKey,
+        K extends DependencyKey.Of<(...args: Args) => any>,
         Th extends CanRequest<P, K>,
         Args extends Target<K, P> extends (...args: infer A) => Out ? A : never,
         Out = Target<K, P> extends (...args: Args) => infer O ? O : unknown,
@@ -884,7 +887,7 @@ export class Container<P extends Container.Graph> {
      * @group Request Methods
      */
     buildAsync<
-        K extends DependencyKey,
+        K extends DependencyKey.Of<(...args: Args) => any>,
         Th extends CanRequest<P, K, never>,
         Args extends Target<K, P> extends (...args: infer A) => Out ? A : never,
         Out = Target<K, P> extends (...args: Args) => infer O ? O : unknown,

@@ -100,7 +100,7 @@ export abstract class BaseModule<P extends ProvideGraph = any> implements Module
      * @see {@link Container.build}
      */
     build<
-        K extends DependencyKey,
+        K extends DependencyKey.Of<(...args: Args) => any>,
         Th extends CanRequest<Merge<DefaultGraph, P>, K>,
         Args extends ModuleActual<K, P> extends (...args: infer A) => Out ? A : never,
         Out = ModuleActual<K, P> extends (...args: Args) => infer O ? O : unknown,
@@ -113,7 +113,7 @@ export abstract class BaseModule<P extends ProvideGraph = any> implements Module
      * @see {@link Container.buildAsync}
      */
     buildAsync<
-        K extends DependencyKey,
+        K extends DependencyKey.Of<(...args: Args) => any>,
         Th extends CanRequest<Merge<DefaultGraph, P>, K, never>,
         Args extends ModuleActual<K, P> extends (...args: infer A) => Out ? A : never,
         Out = ModuleActual<K, P> extends (...args: Args) => infer O ? O : unknown,

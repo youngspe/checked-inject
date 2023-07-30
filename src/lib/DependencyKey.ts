@@ -36,31 +36,36 @@ export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = a
     | BaseTypeKey<T>
     | HasComputedKeySymbol<T, D, Sync>
 
-/** The actual type that a dependency key of type `D` resolves to. */
-type Actual<K extends DependencyKey> =
-    K extends DependencyKey.Of<infer _T> ? (
+/**
+ * The type that {@link K} resolves to.
+ *
+ * @typeParam G - The {@link Container.Graph} of the {@link Container} resolving {@link K}
+ * @group Injection
+ */
+export type Target<K extends DependencyKey, G extends Container.Graph = never> =
+    K extends DependencyKey.Of<infer _T> ? ContainerTransform<(
         K extends HasComputedKeySymbol<infer T> | HasTypeKeySymbol<infer T> ? T :
         K extends InjectableClass<infer T> ? T :
         K extends StructuredKey<infer T> ? T :
         _T
-    ) :
-    K extends readonly any[] ? ArrayActual<K> :
-    K extends OnlyObject<DependencyKey> ? ObjectActual<K> :
+    ), G> :
+    K extends readonly any[] ? ArrayTarget<K, G> :
+    K extends OnlyObject<DependencyKey> ? ObjectTarget<K, G> :
     K extends undefined ? undefined : K extends null ? null :
     K extends void ? void :
     never
 
-type ArrayActual<K extends readonly DependencyKey[]> =
+type ArrayTarget<K extends readonly DependencyKey[], G extends Container.Graph> =
     K extends readonly [] ? [] :
     K extends readonly [
         infer A extends DependencyKey,
         ...infer B extends DependencyKey[]
-    ] ? [Actual<A>, ...ArrayActual<B>] :
-    K extends readonly (infer A extends DependencyKey)[] ? Actual<A>[] :
+    ] ? [Target<A, G>, ...ArrayTarget<B, G>] :
+    K extends readonly (infer A extends DependencyKey)[] ? Target<A, G>[] :
     never
 
-type ObjectActual<K extends OnlyObject<DependencyKey>> = {
-    [X in keyof K]: Actual<K[X]>
+type ObjectTarget<K extends OnlyObject<DependencyKey>, G extends Container.Graph> = {
+    [X in keyof K]: Target<K[X], G>
 }
 
 type Leaves<T> =
@@ -69,35 +74,22 @@ type Leaves<T> =
     T extends (...args: any[]) => infer U ? Leaves<U> :
     T
 
-type ContainerTransform<T, P extends Container.Graph> =
-    [P] extends [never] ? T : Container<any> extends Leaves<T> ? (
+type ContainerTransform<T, G extends Container.Graph> =
+    [G] extends [never] ? T : Container<any> extends Leaves<T> ? (
         T extends readonly [] ? [] :
         T extends readonly [infer A, ...infer B] ? [
-            ContainerTransform<A, P>,
-            ...ContainerTransform<B, P>
+            ContainerTransform<A, G>,
+            ...ContainerTransform<B, G>
         ] :
-        T extends readonly (infer U)[] ? ContainerTransform<U, P>[] :
-        T extends Container<infer P1> ? Container<Merge<P, P1>> :
-        T extends Promise<infer U> ? Promise<ContainerTransform<U, P>> :
-        T extends (...args: infer Args) => infer U ? (...args: Args) => ContainerTransform<U, P> :
+        T extends readonly (infer U)[] ? ContainerTransform<U, G>[] :
+        T extends Container<infer P1> ? Container<Merge<G, P1>> :
+        T extends Promise<infer U> ? Promise<ContainerTransform<U, G>> :
+        T extends (...args: infer Args) => infer U ? (...args: Args) => ContainerTransform<U, G> :
         T extends OnlyObject ? {
-            [K in keyof T]: ContainerTransform<T[K], P>
+            [K in keyof T]: ContainerTransform<T[K], G>
         } :
         T
     ) : T
-
-type _Target<K extends DependencyKey, G extends Container.Graph = never> = ContainerTransform<Actual<K>, G>
-
-/**
- * The type that {@link K} resolves to.
- *
- * @typeParam G - The {@link Container.Graph} of the {@link Container} resolving {@link K}
- * @group Injection
- */
-export type Target<K extends DependencyKey, G extends Container.Graph = never> =
-    // This conditional prevents Target from expanding to ContainerTransform in docs
-    [K] extends [infer _] ? _Target<K, G> : _Target<K, G>
-
 
 /** @ignore */
 export abstract class UnableToResolve<in out K> {
