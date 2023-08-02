@@ -1,11 +1,12 @@
 
 // Dependency pair
 
-import { Dependency } from "./Dependency"
-import { Scope, ScopeList } from "./Scope"
+import { Dependency } from './Dependency'
+import { Scope, ScopeList } from './Scope'
+import { Invariant, SpreadInvariant } from './_internal'
 
 /** @ignore */
-export interface DepPair<out K extends Dependency, D extends Dependency> {
+export interface DepPair<in out K extends Dependency, D extends Dependency> {
     deps: D
     key: K
 }
@@ -16,7 +17,7 @@ export interface WithScope<Scp extends Scope> {
 }
 
 /** @ignore */
-export interface GraphPairs extends DepPair<Dependency, any> { }
+export interface GraphPairs extends DepPair<any, any> { }
 
 interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
     pairs: Pairs
@@ -36,16 +37,24 @@ export type ProvideGraph<Pairs extends GraphPairs = GraphPairs> =
     | FlatGraph<Pairs>
     | ChildGraph<ProvideGraph, Pairs>
 
-type MergePairs<Old extends GraphPairs, New extends GraphPairs> = Exclude<Old, DepPair<New['key'], any>> | New
+type MergePairs<Old extends GraphPairs, New extends GraphPairs> =
+    | New
+    | (Old extends any ? (
+        Invariant<Old['key']> extends SpreadInvariant<New['key']> ? never : Old
+    ) : never)
 
 /** @ignore */
 export type Merge<Old extends ProvideGraph, New extends ProvideGraph> =
-    New extends ChildGraph<infer Parent, infer Pairs> ? ChildGraph<Merge<Old, Parent>, Pairs> :
-    New extends FlatGraph<infer Pairs> ? Provide<Old, Pairs> :
-    never
+    & (
+        New extends ChildGraph<infer Parent, infer Pairs> ? ChildGraph<Merge<Old, Parent>, Pairs> :
+        New extends FlatGraph<infer Pairs> ? Provide<Old, Pairs> :
+        never
+    )
 
 /** @ignore */
 export type Provide<P extends ProvideGraph, Pairs extends GraphPairs> =
-    P extends ChildGraph<infer Parent, infer OldPairs> ? ChildGraph<Parent, MergePairs<OldPairs, Pairs>> :
-    P extends FlatGraph<infer OldPairs> ? FlatGraph<MergePairs<OldPairs, Pairs>> :
-    never
+    & (
+        P extends ChildGraph<infer Parent, infer OldPairs> ? ChildGraph<Parent, MergePairs<OldPairs, Pairs>> :
+        P extends FlatGraph<infer OldPairs> ? FlatGraph<MergePairs<OldPairs, Pairs>> :
+        never
+    )

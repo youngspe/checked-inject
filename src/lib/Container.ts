@@ -3,7 +3,7 @@ import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
-import { BaseResource, Dependency, IsSync, NotSync, RequireSync } from './Dependency'
+import { BaseResource, Dependency, IsSync, NotSync, RequireSync, ShouldDetectCycles } from './Dependency'
 import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey } from './DependencyKey'
 import { Initializer, nameFunction } from './_internal'
 import { Module } from './Module'
@@ -404,7 +404,7 @@ export class Container<P extends Container.Graph> {
             }
         }
 
-        let entry: Entry<T, P, DependencyKey>
+        let entry: Entry<T, P, any>
 
         if (typeof args[args.length - 1] == 'function') {
             const hasDepsArg = args.length - (hasScopeArg ? 1 : 0) >= 2
@@ -627,6 +627,13 @@ export class Container<P extends Container.Graph> {
     }
 
     /**
+     * Improves the diagnostics for when a dependency cycle occurs, potentially at the cost of compile-time performance
+     */
+    detectCycles(): Container<Provide<P, DepPair<ShouldDetectCycles, never>>> {
+        return this as any
+    }
+
+    /**
      * Requests the dependency specified by the given key,
      * without statically checking that the dependency is safe to request.
      *
@@ -731,7 +738,7 @@ export class Container<P extends Container.Graph> {
      *      .provideInstance(IdKey, id)
      *  )
      *
-     *  const childContainer = mySubcomponent('Alice", '123')
+     *  const childContainer = mySubcomponent('Alice', '123')
      *
      *  const user = childContainer.request(User)
      *  ```
@@ -1030,6 +1037,12 @@ export namespace Container {
          * @see {@link Container.apply}
          */
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
+
+        /**
+         * {@inheritDoc Container.detectCycles}
+         * @see {@link Container.detectCycles}
+         */
+        detectCycles(): Builder<Provide<P, DepPair<ShouldDetectCycles, never>>>
     }
 }
 
@@ -1041,14 +1054,35 @@ interface Invariant<in out T> { }
  */
 export function _assertContainer<G extends Container.Graph>(ct: Container<G> | Module<G>) {
     return {
-        async cannotRequestSync<K extends DependencyKey>(this: CanRequest<G, K, never>, key: K, _because?: Invariant<CanRequest<G, K>>) {
+        [unresolved]: undefined as void,
+        async canRequest<K extends DependencyKey>(
+            this: (
+                & CanRequest<G, K>
+                & CanRequest<G, K, never>
+                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>
+                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>
+            ),
+            key: K
+        ) {
+            ct.requestUnchecked(key)
+            await ct.requestAsyncUnchecked(key)
+        },
+
+        async cannotRequestSync<K extends DependencyKey>(
+            this: CanRequest<G, K, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>,
+            key: K,
+            _because?: Invariant<CanRequest<G, K> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>>,
+        ) {
             try {
                 ct.requestUnchecked(key)
                 throw new Error('expected request to fail')
             } catch { }
             await ct.requestAsyncUnchecked(key)
         },
-        async cannotRequest<K extends DependencyKey>(key: K, _because?: Invariant<CanRequest<G, K, never>>) {
+        async cannotRequest<K extends DependencyKey>(
+            key: K,
+            _because?: Invariant<CanRequest<G, K, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>>,
+        ) {
             try {
                 await ct.requestAsyncUnchecked(key)
                 throw new Error('expected request to fail')

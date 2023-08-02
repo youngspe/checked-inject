@@ -1,10 +1,13 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, ToCyclic, Missing, SubcomponentResolve } from "./Dependency"
-import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from "./DependencyKey"
-import { InjectableClass } from "./InjectableClass"
-import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from "./ProvideGraph"
-import { Scope } from "./Scope"
-import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from "./TypeKey"
+import { Dependency, IsSync, FailedDependency, CyclicDependency, ToCyclic, Missing, SubcomponentResolve, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, Naught, BaseResource } from './Dependency'
+import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
+import { InjectableClass } from './InjectableClass'
+import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
+import { Scope } from './Scope'
+import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from './TypeKey'
+import { ExtractInvariant, Invariant, SpreadInvariant } from './_internal'
 
+export type UseCycleDetection<G extends ProvideGraph, D extends Dependency> =
+    Invariant<ShouldDetectCycles> extends AllKeysInvariant<G> ? DetectCycles<D> : D
 
 type UnresolvedKeys<
     P extends ProvideGraph,
@@ -25,20 +28,26 @@ export type CanRequest<
     Sync extends Dependency = IsSyncDepsOf<K>,
 > = ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
-type GraphWithKeys<K extends Dependency> =
-    | FlatGraph<K extends any ? DepPair<K, any> : never>
-    | ChildGraph<GraphWithKeys<K>, K extends any ? DepPair<K, any> : never>
+export type AllKeysInvariant<G extends ProvideGraph> =
+    | (PairsOf<G> extends infer Pair extends GraphPairs ? (
+        Pair extends any ? Invariant<Pair['key']> : never
+    ) : never)
+    | (G extends ChildGraph<infer Parent, infer _> ? AllKeysInvariant<Parent> : never)
+export type AllKeys<G extends ProvideGraph> =
+    | PairsOf<G>['key']
+    | (G extends ChildGraph<infer Parent, infer _> ? AllKeys<Parent> : never)
 
-type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
-
-type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, D> extends never ? (
+type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = ExtractInvariant<KeysOfInvariant<P>, D> extends never ? (
     P extends ChildGraph<infer Parent> ? _FindGraphWithDep<Parent, D> : never
 ) : P
 
 type ExcludeBroad<D extends Dependency> = D extends Extract<Dependency, D> ? never : D
 
 type FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = _FindGraphWithDep<P, ExcludeBroad<D>>
-type IntersectKeyOf<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, ExcludeBroad<D>>
+type IntersectKeyOf<P extends ProvideGraph, D extends Dependency> = ExtractInvariant<KeysOfInvariant<P>, ExcludeBroad<D>>
+
+type CheckHasScopes<G extends ProvideGraph, Scp extends Scope> =
+    Scp extends AllKeys<G> ? never : Missing<Scp>
 
 type DepsForKeyTransitive<
     PRoot extends ProvideGraph,
@@ -46,28 +55,36 @@ type DepsForKeyTransitive<
     PCurrent extends ProvideGraph = PRoot,
     Pairs extends GraphPairs = PairsOf<PCurrent>,
 > =
-    K extends KeysOf<PCurrent> ? (Pairs extends DepPair<K, infer D> ? (
+    Invariant<K> extends KeysOfInvariant<PCurrent> ? (Pairs extends DepPair<K, infer D> ? (
         Pairs extends WithScope<infer Scp> ? (
-            IntersectKeyOf<PRoot, Scp | K> extends never ? DepsForKey<FindGraphWithDep<PRoot, Scp | K>, D> : D
-        ) : D
+            CheckHasScopes<PRoot, Scp> extends infer HS extends Dependency ? (
+                [HS] extends [never] ? (
+                    IntersectKeyOf<PRoot, Scp | K> extends never ? WrapIn<FindGraphWithDep<PRoot, Scp | K>, D> :
+                    D
+                ) : HS) : D
+        ) : never
     ) : never) :
     PCurrent extends ChildGraph<infer Parent> ? DepsForKeyTransitive<PRoot, K, Parent> :
     UnableToResolve<['DepsForKeyTransitive', K]>
 
+type _DepsForKeyScoped<G extends ProvideGraph, Scp extends Scope, D extends Dependency> =
+    [Scp] extends never ? D :
+    CheckHasScopes<G, Scp> extends infer HS extends Dependency ? ([HS] extends [never] ? (
+        IntersectKeyOf<G, Scp> extends never ? WrapIn<FindGraphWithDep<G, Scp>, Scp | D> :
+        D | Scp
+    ) : HS) :
+    never
+
 type DepsForKeyScoped<P extends ProvideGraph, K, D extends Dependency> =
-    K extends WithScope<infer Scp> ? (
-        [Scp] extends never ? D :
-        Scope extends Scp ? D :
-        IntersectKeyOf<P, Scp> extends never ? DepsForKey<FindGraphWithDep<P, Scp>, Scp | D> : D | Scp
-    ) : D
+    K extends WithScope<infer Scp> ? _DepsForKeyScoped<P, ExcludeBroad<Scp>, D> :
+    D
 
 type DepsForKeyIsSync<
     P extends ProvideGraph,
-    K2 extends InjectableClass | BaseTypeKey,
+    K2 extends BaseResource,
     K extends IsSync<K2>,
 > =
-    K2 extends AllKeys<P> ? Missing<K> :
-    K2 extends KeyWithoutDefault ? never :
+    K2 extends Naught | KeyWithoutDefault ? never :
     K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K2, Sync> :
     UnableToResolve<['DepsForKeyIsSync', K]>
 
@@ -78,7 +95,7 @@ type DepsForKeyFallback<
     K extends KeyWithoutDefault ? Missing<K> :
     K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<P, K, D> :
     K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
-    K extends CyclicDependency<infer K2, infer C> ? ToCyclic<DepsForKeyStep<P, K2>, C> :
+    K extends CyclicDependency<infer K2, infer C, infer E> ? ApplyCyclic<DepsForKeyStep<P, K2>, C, E> :
     Missing<K>
 
 type _DepsForKeyStep<
@@ -86,22 +103,24 @@ type _DepsForKeyStep<
     K extends Dependency,
 > =
     Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
-    K extends SubcomponentResolve<infer GSub, infer D> ? DepsForKey<Merge<P, GSub>, D> :
-    K extends AllKeys<P> ? DepsForKeyTransitive<P, K> :
+    K extends SubcomponentResolve<any, never> ? never :
+    K extends SubcomponentResolve<infer GSub, infer D> ? SubcomponentResolve<GSub, DepsForKeyStep<Merge<P, GSub>, D>> :
+    K extends In<infer G2, infer D> ? WrapIn<G2, DepsForKeyStep<G2, D>> :
+    Invariant<K> extends AllKeysInvariant<P> ? DepsForKeyTransitive<P, K> :
     DepsForKeyFallback<P, K>
 
 type DepsForKeyStep<
     P extends ProvideGraph,
     K extends Dependency,
 > =
-    K extends FailedDependency ? never :
+    K extends Naught | FailedDependency ? never :
     _DepsForKeyStep<P, ValidateDep<K>>
 
 type DepsForKey<
     P extends ProvideGraph,
     K extends Dependency,
 > = [K] extends [FailedDependency] ? K : (
-    | DepsForKey<P, DepsForKeyStep<P, K>>
+    | DepsForKey<P, DepsForKeyStep<P, UseCycleDetection<P, K>>>
     | (K extends FailedDependency ? K : never)
 )
 
@@ -115,5 +134,7 @@ type ValidateDep<D extends Dependency> =
     ) :
     D
 
-type PairsOf<P extends ProvideGraph> = P['pairs']
-type KeysOf<P extends ProvideGraph> = PairsOf<P>['key']
+type PairsOf<G extends ProvideGraph> = G['pairs']
+type KeysOfInvariant<G extends ProvideGraph> = PairsOf<G> extends infer Pair extends GraphPairs ? (
+    Pair extends any ? Invariant<Pair['key']> : never
+) : never

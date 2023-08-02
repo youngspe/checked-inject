@@ -6,14 +6,14 @@ import { Initializer } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
 import { TypeKey, FactoryKey } from './TypeKey'
 import { Injectable } from './InjectableClass'
-import { SubcomponentResolve, ToCyclic } from './Dependency'
+import { AllowCycles, Naught, SubcomponentResolve, ToCyclic } from './Dependency'
 
 /**
  * Implementations of {@link ComputedKey} for customizing resource injections.
  */
 export namespace Inject {
     /** @see {@link value} */
-    export abstract class Value<T> extends BaseComputedKey<T, void, never> {
+    export abstract class Value<T> extends BaseComputedKey<T, void, Naught, Naught> {
         readonly instance: T
         private readonly _init: Initializer.Sync<T>
 
@@ -149,7 +149,7 @@ export namespace Inject {
 
     /** @see {@link lazy} */
     export abstract class GetLazy<K extends DependencyKey>
-        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
+        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, Naught> {
         override init(deps: Initializer<Target<K>> | InjectError): Initializer.Sync<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             let d: Initializer<Target<K>> | null = deps
@@ -191,7 +191,7 @@ export namespace Inject {
 
     /** @see {@link provider} */
     export abstract class GetProvider<K extends DependencyKey>
-        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, never> {
+        extends BaseComputedKey<() => Target<K>, K, DepsOf<K> | IsSyncDepsOf<K>, Naught> {
         override init(deps: Initializer<Target<K>> | InjectError): Initializer.Sync<() => Target<K>> | InjectError {
             if (deps instanceof InjectError) return deps
             const out = {
@@ -229,7 +229,7 @@ export namespace Inject {
     const undefinedInit = () => undefinedRef
 
     /** @see {@link optional} */
-    export abstract class Optional<K extends DependencyKey> extends BaseComputedKey<Target<K> | undefined, K, never, IsSyncDepsOf<K>> {
+    export abstract class Optional<K extends DependencyKey> extends BaseComputedKey<Target<K> | undefined, K, Naught, IsSyncDepsOf<K>> {
 
         override init(deps: Initializer<Target<K>> | InjectError): Initializer<Target<K> | undefined> {
             if (deps instanceof InjectError) return undefinedInit
@@ -252,7 +252,7 @@ export namespace Inject {
         return new _Optional(src)
     }
 
-    export abstract class Unchecked<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, never, IsSyncDepsOf<K>> {
+    export abstract class Unchecked<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, Naught, IsSyncDepsOf<K>> {
         override init(deps: Initializer<Target<K>> | InjectError) {
             return deps
         }
@@ -277,7 +277,7 @@ export namespace Inject {
     }
 
     /** @see {@link cyclic} */
-    export abstract class Cyclic<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, ToCyclic<DepsOf<K>>, IsSyncDepsOf<K>> {
+    export abstract class Cyclic<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, AllowCycles<DepsOf<K>>, IsSyncDepsOf<K>> {
         override init(deps: Initializer<Target<K>> | InjectError) {
             return deps
         }
@@ -332,7 +332,7 @@ export namespace Inject {
     }
 
     /** @see {@link async} */
-    export abstract class Async<K extends DependencyKey> extends BaseComputedKey<Promise<Target<K>>, K, DepsOf<K>, never> {
+    export abstract class Async<K extends DependencyKey> extends BaseComputedKey<Promise<Target<K>>, K, DepsOf<K>, Naught> {
         override init(deps: InjectError | Initializer<Target<K>>): InjectError | Initializer<Promise<Target<K>>> {
             if (deps instanceof InjectError) return deps
             return () => ({ value: Promise.resolve(deps()).then(({ value }) => value) })
@@ -441,7 +441,7 @@ export namespace Inject {
             (...args: Args) => Target<K>,
             DependencyKey.Of<Container.Subcomponent<Args, G>>,
             SubcomponentResolve<G, DepsOf<K> | IsSyncDepsOf<K>>,
-            never
+            Naught
         > {
             readonly key: K
 

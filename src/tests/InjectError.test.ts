@@ -1,5 +1,8 @@
-import { Container, Errors, Inject, Scope, Singleton, TypeKey } from "../lib";
-import { _assertContainer, _because } from "../lib/Container";
+import { Container, Errors, Inject, Scope, Singleton, TypeKey } from '../lib'
+import { AllKeysInvariant, UseCycleDetection } from '../lib/CanRequest';
+import { _assertContainer, _because } from '../lib/Container';
+import { IsSync, ShouldDetectCycles } from '../lib/Dependency';
+import { Invariant, SpreadInvariant, _Invariant } from '../lib/_internal';
 
 class NumberKey extends TypeKey<number>() { private _: any }
 class StringKey extends TypeKey<string>() { private _: any }
@@ -55,7 +58,7 @@ describe(Errors.InjectError, () => {
         await _assertContainer(target).cannotRequestSync(CustomKey1.Optional(), _because<never, typeof StringKey>())
         await _assertContainer(target).cannotRequest(CustomKey1.Optional().Lazy(), _because<never, typeof StringKey>())
         await _assertContainer(target).cannotRequest(CustomKey1.Optional().Provider(), _because<never, typeof StringKey>())
-        target.request(CustomKey1.Optional().Async().Lazy())
+        await _assertContainer(target).canRequest(CustomKey1.Optional().Async().Lazy())
     })
 
     test('TypeKey.scope is respected when no scope is provided', async () => {

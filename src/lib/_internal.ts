@@ -91,3 +91,16 @@ export function nameFunction<F extends (...any: any[]) => any>(f: F, name: strin
     }
     return { [name]: ((...args) => f(...args)) as F }[name]
 }
+
+
+export declare abstract class _Invariant<in out T> { private _: T }
+export type Invariant<T> = [T] extends [_Invariant<infer _>] ? T : _Invariant<T>
+export type SpreadInvariant<T> = T extends any ? Invariant<T> : never
+
+export type ExcludeInvariant<T, U> = T extends any ? (
+    Invariant<T> extends SpreadInvariant<U> ? never : T
+) : never
+
+export type ExtractInvariant<T, U> = T extends any ? (
+    Invariant<T> extends SpreadInvariant<U> ? T : U
+) : never

@@ -25,10 +25,10 @@ export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
  */
 export abstract class ComputedKey<
     T = any,
-    K extends DependencyKey = any,
-    D extends Dependency = any,
-    Sync extends Dependency = any,
-    P extends Container.Graph = any,
+    in out K extends DependencyKey = any,
+    in out D extends Dependency = any,
+    in out Sync extends Dependency = any,
+    in P extends Container.Graph = any,
 > extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
     /** @ignore */
     readonly [_computedKeySymbol]!: readonly [T, D, Sync] | null

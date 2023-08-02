@@ -4,7 +4,7 @@ import { AbstractKey } from './AbstractKey'
 import { Scope, ScopeList } from './Scope'
 import { DependencyKey, Target } from './DependencyKey'
 import { AbstractClass, Class, asMixin, isObject } from './_internal'
-import { Dependency } from './Dependency'
+import { Dependency, Naught } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
 import TypeKeyClass = TypeKey.TypeKeyClass
@@ -235,7 +235,7 @@ export function FactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...args:
  */
 export function FactoryKey<T, Args extends any[]>(
     fac: (...args: Args) => T,
-): TypeKeyClass<(...args: Args) => T, ComputedKey.WithDepsOf<(...args: Args) => T, void>>
+): TypeKeyClass<(...args: Args) => T, ComputedKey<(...args: Args) => T, any, Naught, Naught>>
 
 /**
  * @param deps - A {@link DependencyKey} specifying dependencies of the factory function.
@@ -263,7 +263,8 @@ export function FactoryKey<
         | [deps: K, fac: (deps: Target<K>, ...args: Args) => T]
 ): TypeKeyClass<
     (...args: Args) => T,
-    ComputedKey.WithDepsOf<(...args: Args) => T, Inject.GetProvider<K>>
+    | ComputedKey.WithDepsOf<(...args: Args) => T, Inject.GetProvider<K>>
+    | ComputedKey.WithDepsOf<(...args: Args) => T, void>
 > {
     if (args.length == 2) {
         let [deps, fac] = args
@@ -303,7 +304,7 @@ export function AsyncFactoryKey<T, Args extends any[] = []>(): TypeKeyClass<(...
  */
 export function AsyncFactoryKey<T, Args extends any[]>(
     fac: (...args: Args) => T | Promise<T>,
-): TypeKeyClass<(...args: Args) => Promise<T>, ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, void>>
+): TypeKeyClass<(...args: Args) => Promise<T>, ComputedKey<(...args: Args) => Promise<T>, any, Naught, Naught>>
 
 /**
  * @param deps - A {@link DependencyKey} specifying dependencies of the async factory function
@@ -329,12 +330,16 @@ export function AsyncFactoryKey<
         | [deps: K, fac: (deps: Target<K>, ...args: Args) => T | Promise<T>]
 ): TypeKeyClass<
     (...args: Args) => Promise<T>,
-    ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, Inject.Async<K>>
+    | ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, Inject.Async<K>>
+    | ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, void>
 > {
     if (args.length == 2) {
         let [deps, fac] = args
         return class extends TypeKey({
-            default: Inject.map(Inject.async(deps).Provider(), d => (...args: Args) => d().then(d => fac(d, ...args)))
+            default: Inject.map(
+                Inject.async(deps).Provider(), d => (...args: Args) => d().then(d => fac(d, ...args))
+            ) as ComputedKey<(...args: Args) => Promise<T>>
+
         }) {
             static readonly scope?: ScopeList | (() => ScopeList) = Scope.Local
         }
