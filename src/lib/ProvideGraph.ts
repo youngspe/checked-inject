@@ -1,8 +1,8 @@
 
 // Dependency pair
 
-import { Dependency } from "./Dependency"
-import { Scope, ScopeList } from "./Scope"
+import { Dependency } from './Dependency'
+import { Scope, ScopeList } from './Scope'
 
 /** @ignore */
 export interface DepPair<out K extends Dependency, D extends Dependency> {
@@ -16,7 +16,7 @@ export interface WithScope<Scp extends Scope> {
 }
 
 /** @ignore */
-export interface GraphPairs extends DepPair<Dependency, any> { }
+export interface GraphPairs extends DepPair<any, any> { }
 
 interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
     pairs: Pairs

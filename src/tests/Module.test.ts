@@ -1,4 +1,4 @@
-import { Inject, Module, Scope, Target, TypeKey } from '../lib'
+import { FactoryKey, Inject, Injectable, LazyKey, Module, Scope, Singleton, Target, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
 import { sleep } from './utils'
 
@@ -164,6 +164,7 @@ describe(Module, () => {
 
         const MyModule = Module(UserModule, ct => ct
             .provide(Keys.UserInfo, UserScope, Inject.from({ userId: Keys.UserId, userName: Keys.UserName }))
+            .detectCycles()
         )
 
         MyModule.inject({
@@ -176,5 +177,44 @@ describe(Module, () => {
             expect(a2).toEqual({ userName: 'bob', userId: '456' })
             expect(b2).toBe(a2)
         })
+    })
+
+    test('SubcomponentDefinition.Resolve() with cycles (more complex)', () => {
+        class MyScope extends Scope() { private _: any }
+        const MySubcomponent = Inject.subcomponent((ct, num: number) => ct
+            .addScope(MyScope)
+            .provideInstance(NumberKey, num)
+        )
+
+        class NumberKey extends TypeKey<number>() { private _: any }
+        class BaseFoo extends Injectable { private a: any }
+        class Foo extends BaseFoo {
+            private b: any
+            static scope = Singleton
+            static inject = () => Inject.map({ bar: BarKey }, () => new Foo())
+        }
+
+        class BarKey extends TypeKey<() => Bar>() { private _: any }
+        class Bar {
+            private _: any
+            static Factory = class extends FactoryKey(LazyKey(() => ({
+                foo: BaseFoo.Lazy(),
+                baz: MySubcomponent.Resolve(Baz).Lazy(),
+            })), () => new Bar()) { private _: any }
+        }
+
+        class Baz {
+            private _: any
+            static scope = MyScope
+            static inject = Inject.lazy(BaseFoo)
+        }
+
+        const MyModule = Module(ct => ct
+            .bind(BaseFoo, Foo)
+            .bind(BarKey, Bar.Factory)
+            .detectCycles()
+        )
+
+        MyModule.container().request(Foo)
     })
 })

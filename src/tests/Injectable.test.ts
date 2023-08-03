@@ -1,5 +1,5 @@
-import { Inject, Injectable, Module, TypeKey } from "../lib"
-import { sleep } from "./utils"
+import { Inject, Injectable, Module, TypeKey } from '../lib'
+import { sleep } from './utils'
 
 const Keys = {
     UserName: class extends TypeKey<string>() { private _: any },

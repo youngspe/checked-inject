@@ -6,63 +6,120 @@ import { InjectableClass } from './InjectableClass'
 import { ProvideGraph } from './ProvideGraph'
 
 /** @ignore */
-export type BaseResource<T = any> = BaseTypeKey<T> | InjectableClass<T>
+export type BaseResource = BaseTypeKey | ClassDep
 
-const _isSyncSymbol = Symbol()
-
-/** @ignore */
-export abstract class IsSync<out K extends BaseResource> {
-    private [_isSyncSymbol]!: K
-    private constructor() { }
+export declare abstract class ClassDep<in out D extends InjectableClass = any> {
+    private _: D
 }
-const _notSyncSymbol = Symbol()
 
 /** @ignore */
-export abstract class NotSync<out K extends BaseResource> {
-    private [_notSyncSymbol]!: K
-    private constructor() { }
+export declare abstract class IsSync<out K extends BaseResource> {
+    private _: K
+}
+
+/** @ignore */
+export declare abstract class NotSync<out K extends BaseResource> {
+    private _: K
 }
 
 /** @ignore */
 export type RequireSync<D extends Dependency> = D extends BaseResource ? IsSync<D> : never
 
-const _cyclicDependencySymbol = Symbol()
-
 /** @ignore */
-export abstract class CyclicDependency<
-    out K extends BaseResource,
-    out C extends BaseResource = K,
+export declare abstract class CyclicDependency<
+    out K extends Dependency,
+    out C extends CyclicC,
+    out E extends BaseResource,
 > {
-    [_cyclicDependencySymbol]!: [K, C]
+    private _: [K, C, E]
 }
 
-type _ToCyclic<D extends BaseResource, C extends BaseResource> =
+type CyclicC<B extends BaseResource = BaseResource> = B | In<any, B>
+type ExpandCyclicC<C extends Dependency> = C extends CyclicC<infer B> ? B : never
+
+type _ApplyCyclicErrors<E extends BaseResource> = E extends any ? CycleDetected<E> : never
+type ApplyCyclicErrors<D extends Dependency, E extends BaseResource> = _ApplyCyclicErrors<Extract<E, ExpandCyclicC<D>>>
+export type ApplyCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
+    | Exclude<D, C>
+    | ApplyCyclicErrors<Extract<D, C>, E>
+
+type _ToCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
     [D] extends [never] ? never :
     [C] extends [never] ? D :
-    CyclicDependency<D, C>
+    CyclicDependency<D, C, E>
+
+type CyclicIgnore =
+    | FailedDependency
+    | Scope
+    | CyclicDependency<any, any, any>
+    | SubcomponentResolve<any, any>
 
 /** @ignore */
-export type ToCyclic<D extends Dependency, C extends BaseResource = Extract<D, BaseResource>> =
-    | _ToCyclic<Extract<D, BaseResource>, C>
+export type ToCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
+    | _ToCyclic<Exclude<D, CyclicIgnore>, C, E>
     | (
-        D extends BaseResource ? never :
-        D extends CyclicDependency<infer K, infer C2> ? _ToCyclic<Exclude<K, C>, C | C2> :
-        D extends SubcomponentResolve<infer G, infer K> ? SubcomponentResolve<G, ToCyclic<K, C>> :
-        D
+        D extends CyclicDependency<infer K, infer C2, infer E2> ? ToCyclic<
+            ApplyCyclic<K, C, E>,
+            C | C2,
+            E2 | Exclude<E, ExpandCyclicC<C2>>
+        > :
+        D extends SubcomponentResolve<infer G, infer K> ? SubcomponentResolve<
+            G,
+            ToCyclic<K, C, E>
+        > :
+        D extends CyclicIgnore ? D :
+        never
     )
-
-const _scopedSymbol = Symbol()
+/** @ignore */
+export type AllowCycles<D extends Dependency> = ToCyclic<D, Extract<D, CyclicC>, never>
 
 /** @ignore */
-export abstract class Missing<K extends Dependency> {
-    [_scopedSymbol]!: [K]
+export type DetectCycles<D extends Dependency> = D extends CyclicC<infer B> ? ToCyclic<D, D, B> : never
+
+/** @ignore */
+export declare abstract class Missing<in out K extends Dependency> {
+    private _: K
 }
 
-const _subcomponentSymbol = Symbol()
+/** @ignore */
+export declare abstract class SubcomponentResolve<G extends ProvideGraph, D extends Dependency> {
+    private _: [G, D]
+}
 
 /** @ignore */
-export abstract class SubcomponentResolve<G extends ProvideGraph, D extends Dependency> {
-    [_subcomponentSymbol]!: [G, D]
+export declare abstract class In<G extends ProvideGraph, D extends Dependency> {
+    private _: [G, D]
+}
+
+type InFlat<G extends ProvideGraph, D extends CyclicC> =
+    | _WrapIn<G, Exclude<D, In<any, any>>>
+    | (D extends In<any, any> ? D : never)
+
+type _WrapIn<G extends ProvideGraph, D extends Dependency> =
+    [D] extends [never] ? never :
+    In<G, D>
+
+type InIgnore =
+    | FailedDependency
+    | In<any, any>
+    | CyclicDependency<any, any, any>
+
+/** @ignore */
+export type WrapIn<G extends ProvideGraph, D extends Dependency> =
+    | _WrapIn<G, Exclude<D, InIgnore>>
+    | (
+        D extends CyclicDependency<infer K, infer C, infer E> ? CyclicDependency<WrapIn<G, K>, InFlat<G, C>, E> :
+        D extends InIgnore ? D :
+        never
+    )
+
+export declare abstract class CycleDetected<C extends BaseResource> {
+    private _: C
+}
+
+/** @ignore */
+export declare abstract class ShouldDetectCycles {
+    readonly _: any
 }
 
 /**
@@ -76,9 +133,11 @@ export type Dependency =
     | Scope
     | BaseTypeKey
     | IsSync<any>
-    | PrivateConstruct
-    | CyclicDependency<any, any>
+    | CyclicDependency<any, any, any>
     | SubcomponentResolve<any, any>
+    | In<any, any>
+    | ShouldDetectCycles
+    | ClassDep
     | FailedDependency
 
 export type FailedDependency =
@@ -87,3 +146,4 @@ export type FailedDependency =
     | UnableToResolveIsSync<any>
     | NotDistinct<any>
     | NotSync<any>
+    | CycleDetected<any>

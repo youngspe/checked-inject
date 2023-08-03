@@ -3,7 +3,7 @@ import { Container } from './Container'
 import { PrivateConstruct } from './_internal'
 import { BaseTypeKey, HasTypeKeySymbol, TypeKey } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
-import { BaseResource, Dependency, IsSync } from './Dependency'
+import { ClassDep, Dependency, IsSync } from './Dependency'
 import { Merge } from './ProvideGraph'
 
 export type ResourceKey<T = any> = TypeKey<T> | InjectableClass<T>
@@ -107,10 +107,12 @@ export abstract class NotDistinct<in out K> {
     private _i!: K
 }
 
+export type ToBaseResource<K extends ResourceKey> = K extends InjectableClass ? (K & ClassDep<K>) : K
+
 /** @ignore */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
-    K extends BaseResource ? K :
+    K extends ResourceKey ? ToBaseResource<K> :
     K extends DependencyKey.Of<infer _T, never> ? never :
     K extends DependencyKey.Of<infer _T, infer D> ? D :
     K extends readonly (infer X extends DependencyKey)[] ? DepsOf<X> :
@@ -120,7 +122,7 @@ export type DepsOf<K extends DependencyKey> =
 /** @ignore */
 export type IsSyncDepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
-    K extends BaseResource ? IsSync<K> :
+    K extends ResourceKey ? IsSync<ToBaseResource<K>> :
     K extends DependencyKey.Of<infer _T, any, never> ? never :
     K extends DependencyKey.Of<infer _T, any, infer D> ? D :
     K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> :

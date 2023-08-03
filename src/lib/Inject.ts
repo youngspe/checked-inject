@@ -6,7 +6,7 @@ import { Initializer } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
 import { TypeKey, FactoryKey } from './TypeKey'
 import { Injectable } from './InjectableClass'
-import { SubcomponentResolve, ToCyclic } from './Dependency'
+import { AllowCycles, SubcomponentResolve } from './Dependency'
 
 /**
  * Implementations of {@link ComputedKey} for customizing resource injections.
@@ -277,7 +277,7 @@ export namespace Inject {
     }
 
     /** @see {@link cyclic} */
-    export abstract class Cyclic<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, ToCyclic<DepsOf<K>>, IsSyncDepsOf<K>> {
+    export abstract class Cyclic<K extends DependencyKey> extends BaseComputedKey<Target<K>, K, AllowCycles<DepsOf<K>>, IsSyncDepsOf<K>> {
         override init(deps: Initializer<Target<K>> | InjectError) {
             return deps
         }

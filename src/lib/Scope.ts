@@ -1,7 +1,7 @@
 
 /** Represents a scope for which certain dependencies are provided. */
 
-import { AbstractClass, isObject } from "./_internal"
+import { AbstractClass, isObject } from './_internal'
 
 const _scopeSymbol = Symbol()
 
