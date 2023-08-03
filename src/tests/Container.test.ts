@@ -573,6 +573,7 @@ describe(Container, () => {
         const MyModule = Module(ct => ct
             .provide(CustomKey1, Inject.from({ a: CustomKey2 }))
             .provide(CustomKey2, Inject.from({ b: CustomKey1.Cyclic().Lazy() }))
+            .detectCycles()
         )
 
         MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {

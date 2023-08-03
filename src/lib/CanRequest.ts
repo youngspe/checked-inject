@@ -1,11 +1,12 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, SubcomponentResolve, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource } from './Dependency'
+import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, SubcomponentResolve, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic } from './Dependency'
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
 import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from './TypeKey'
 
 type UseCycleDetection<G extends ProvideGraph, D extends Dependency> =
-    ShouldDetectCycles extends AllKeys<G> ? DetectCycles<D> : D
+    ShouldDetectCycles extends AllKeys<G> ? DetectCycles<D> :
+    D
 
 type UnresolvedKeys<
     P extends ProvideGraph,
@@ -54,9 +55,9 @@ type DepsForKeyTransitive<
             CheckHasScopes<PRoot, Extract<Scp, D>> extends infer HS extends Dependency ? (
                 [HS] extends [never] ? (
                     IntersectKeyOf<PRoot, Scp | K> extends never ? WrapIn<FindGraphWithDep<PRoot, Scp | K>, D> :
-                    D
-                ) : HS) : D
-        ) : never
+                    WrapIn<PRoot, D>
+                ) : HS) : never
+        ) : D
     ) : never) :
     PCurrent extends ChildGraph<infer Parent> ? DepsForKeyTransitive<PRoot, K, Parent> :
     UnableToResolve<['DepsForKeyTransitive', K]>
@@ -69,8 +70,8 @@ type _DepsForKeyScoped<
 > =
     [Scp] extends never ? D :
     CheckHasScopes<G, Extract<Scp, RequireScopeFilter>> extends infer HS extends Dependency ? ([HS] extends [never] ? (
-        IntersectKeyOf<G, Scp> extends never ? WrapIn<FindGraphWithDep<G, Scp>, Extract<Scp, RequireScopeFilter> | D> :
-        D | Scp
+        IntersectKeyOf<G, Scp> extends never ? WrapIn<FindGraphWithDep<G, Scp>, D> :
+        WrapIn<G, D>
     ) : HS) :
     never
 
@@ -101,7 +102,11 @@ type DepsForKeyFallback<
     K extends KeyWithoutDefault ? Missing<K> :
     K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<P, K, D, true> :
     K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
-    K extends CyclicDependency<infer K2, infer C, infer E> ? ApplyCyclic<DepsForKeyStep<P, K2>, C, E> :
+    K extends CyclicDependency<infer K2, infer C, infer E> ? ToCyclic<
+        ApplyCyclic<DepsForKeyStep<P, K2>, C, E>,
+        C,
+        E
+    > :
     Missing<K>
 
 type _DepsForKeyStep<
@@ -119,16 +124,13 @@ type DepsForKeyStep<
     P extends ProvideGraph,
     K extends Dependency,
 > =
-    K extends FailedDependency ? never :
+    K extends FailedDependency ? K :
     _DepsForKeyStep<P, ValidateDep<K>>
 
 type DepsForKey<
     P extends ProvideGraph,
     K extends Dependency,
-> = [K] extends [FailedDependency] ? K : (
-    | DepsForKey<P, DepsForKeyStep<P, UseCycleDetection<P, K>>>
-    | (K extends FailedDependency ? K : never)
-)
+> = [K] extends [FailedDependency] ? K : DepsForKey<P, DepsForKeyStep<P, UseCycleDetection<P, K>>>
 
 type ValidateDep<D extends Dependency> =
     D extends BaseTypeKey | Scope ? (

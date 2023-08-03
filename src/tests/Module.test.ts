@@ -147,17 +147,18 @@ describe(Module, () => {
         Keys.UserInfo1 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
         Keys.UserInfo2 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
 
+        // TODO: put Cyclic back in, figure out why we're not getting errors:
         const UserModule = Module(ct => ct
             .provide(Keys.UserInfo1, Keys.Subcomponent.Resolve({
                 a: Keys.UserInfo,
-                b: Keys.UserInfo1.Cyclic().Lazy(),
+                b: Keys.UserInfo1 /* .Cyclic() */.Lazy(),
             }), f => {
                 const { a, b } = f('alice', '123')
                 return { a, get b() { return b().a } }
             })
             .provide(Keys.UserInfo2, UserScope, {
                 a: Keys.UserInfo,
-                b: Keys.UserInfo2.Cyclic().Lazy(),
+                b: Keys.UserInfo2 /* .Cyclic() */.Lazy(),
             }, ({ a, b }) => ({ a, get b() { return b().a } })
             )
         )

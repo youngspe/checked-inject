@@ -29,7 +29,7 @@ export type RequireSync<D extends Dependency> = D extends BaseResource ? IsSync<
 export declare abstract class CyclicDependency<
     out K extends Dependency,
     out C extends CyclicC,
-    out E extends BaseResource,
+    out E extends CyclicC,
 > {
     private _: [K, C, E]
 }
@@ -37,13 +37,13 @@ export declare abstract class CyclicDependency<
 type CyclicC<B extends BaseResource = BaseResource> = B | In<any, B>
 type ExpandCyclicC<C extends Dependency> = C extends CyclicC<infer B> ? B : never
 
-type _ApplyCyclicErrors<E extends BaseResource> = E extends any ? CycleDetected<E> : never
-type ApplyCyclicErrors<D extends Dependency, E extends BaseResource> = _ApplyCyclicErrors<Extract<E, ExpandCyclicC<D>>>
-export type ApplyCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
+type _ApplyCyclicErrors<E extends CyclicC> = E extends any ? CycleDetected<ExpandCyclicC<E>> : never
+type ApplyCyclicErrors<D extends Dependency, E extends CyclicC> = _ApplyCyclicErrors<Extract<E, D>>
+export type ApplyCyclic<D extends Dependency, C extends CyclicC, E extends CyclicC> =
     | Exclude<D, C>
     | ApplyCyclicErrors<Extract<D, C>, E>
 
-type _ToCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
+type _ToCyclic<D extends Dependency, C extends CyclicC, E extends CyclicC> =
     [D] extends [never] ? never :
     [C] extends [never] ? D :
     CyclicDependency<D, C, E>
@@ -55,13 +55,17 @@ type CyclicIgnore =
     | SubcomponentResolve<any, any>
 
 /** @ignore */
-export type ToCyclic<D extends Dependency, C extends CyclicC, E extends BaseResource> =
+export type ToCyclic<D extends Dependency, C extends CyclicC, E extends CyclicC> =
     | _ToCyclic<Exclude<D, CyclicIgnore>, C, E>
     | (
         D extends CyclicDependency<infer K, infer C2, infer E2> ? ToCyclic<
             ApplyCyclic<K, C, E>,
             C | C2,
-            E2 | Exclude<E, ExpandCyclicC<C2>>
+            (
+                | Exclude<E, C2>
+                | Exclude<E2, C>
+                | Extract<E, E2>
+            )
         > :
         D extends SubcomponentResolve<infer G, infer K> ? SubcomponentResolve<
             G,
@@ -74,7 +78,7 @@ export type ToCyclic<D extends Dependency, C extends CyclicC, E extends BaseReso
 export type AllowCycles<D extends Dependency> = ToCyclic<D, Extract<D, CyclicC>, never>
 
 /** @ignore */
-export type DetectCycles<D extends Dependency> = D extends CyclicC<infer B> ? ToCyclic<D, D, B> : never
+export type DetectCycles<D extends Dependency> = D extends any ? ToCyclic<D, Extract<D, CyclicC>, Extract<D, CyclicC>> : never
 
 /** @ignore */
 export declare abstract class Missing<in out K extends Dependency> {

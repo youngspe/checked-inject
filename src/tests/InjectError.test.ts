@@ -77,7 +77,7 @@ describe(Errors.InjectError, () => {
             // .addScope(MyScope)
             .provideInstance(NumberKey, 30)
 
-        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope | typeof NumberKey>())
+        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         await _assertContainer(child1).cannotRequest(CustomKey, _because<typeof NumberKey>())
         await _assertContainer(grandChild1).cannotRequest(CustomKey, _because<typeof NumberKey>())
     })
@@ -101,7 +101,7 @@ describe(Errors.InjectError, () => {
             // .addScope(MyScope)
             .provideInstance(NumberKey, 30)
 
-        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope | typeof NumberKey>())
+        await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         await _assertContainer(child1).cannotRequest(CustomKey, _because<typeof NumberKey>())
         await _assertContainer(grandChild1).cannotRequest(CustomKey, _because<typeof NumberKey>())
     })
