@@ -1,5 +1,6 @@
-import { Container, Errors, Inject, Scope, Singleton, TypeKey } from '../lib'
+import { Container, Errors, Inject, Module, Scope, Singleton, TypeKey } from '../lib'
 import { _assertContainer, _because } from '../lib/Container'
+import { CycleDetected } from '../lib/Dependency'
 
 class NumberKey extends TypeKey<number>() { private _: any }
 class StringKey extends TypeKey<string>() { private _: any }
@@ -104,5 +105,16 @@ describe(Errors.InjectError, () => {
         await _assertContainer(parent).cannotRequest(CustomKey, _because<typeof MyScope>())
         await _assertContainer(child1).cannotRequest(CustomKey, _because<typeof NumberKey>())
         await _assertContainer(grandChild1).cannotRequest(CustomKey, _because<typeof NumberKey>())
+    })
+
+    test('basic cycle', async () => {
+        const MyModule = Module(ct => ct
+            .provide(StringKey, { num: NumberKey }, ({ num }) => num.toString())
+            .provide(NumberKey, { str: StringKey }, ({ str }) => str.length)
+            .detectCycles()
+        )
+
+        await _assertContainer(MyModule).cannotRequest(StringKey, _because<CycleDetected<typeof StringKey>>())
+        await _assertContainer(MyModule).cannotRequest(NumberKey, _because<CycleDetected<typeof NumberKey>>())
     })
 })

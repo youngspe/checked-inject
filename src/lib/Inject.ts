@@ -6,7 +6,7 @@ import { Initializer } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
 import { TypeKey, FactoryKey } from './TypeKey'
 import { Injectable } from './InjectableClass'
-import { AllowCycles, SubcomponentResolve } from './Dependency'
+import { AllowCycles, WrapSub } from './Dependency'
 
 /**
  * Implementations of {@link ComputedKey} for customizing resource injections.
@@ -440,7 +440,7 @@ export namespace Inject {
         > extends BaseComputedKey<
             (...args: Args) => Target<K>,
             DependencyKey.Of<Container.Subcomponent<Args, G>>,
-            SubcomponentResolve<G, DepsOf<K> | IsSyncDepsOf<K>>,
+            WrapSub<G, DepsOf<K> | IsSyncDepsOf<K>>,
             never
         > {
             readonly key: K

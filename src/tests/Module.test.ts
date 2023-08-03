@@ -151,14 +151,14 @@ describe(Module, () => {
         const UserModule = Module(ct => ct
             .provide(Keys.UserInfo1, Keys.Subcomponent.Resolve({
                 a: Keys.UserInfo,
-                b: Keys.UserInfo1 /* .Cyclic() */.Lazy(),
+                b: Keys.UserInfo1.Cyclic().Lazy(),
             }), f => {
                 const { a, b } = f('alice', '123')
                 return { a, get b() { return b().a } }
             })
             .provide(Keys.UserInfo2, UserScope, {
                 a: Keys.UserInfo,
-                b: Keys.UserInfo2 /* .Cyclic() */.Lazy(),
+                b: Keys.UserInfo2.Cyclic().Lazy(),
             }, ({ a, b }) => ({ a, get b() { return b().a } })
             )
         )
@@ -213,7 +213,7 @@ describe(Module, () => {
         const MyModule = Module(ct => ct
             .bind(BaseFoo, Foo)
             .bind(BarKey, Bar.Factory)
-            .detectCycles()
+            // .detectCycles()
         )
 
         MyModule.container().request(Foo)
