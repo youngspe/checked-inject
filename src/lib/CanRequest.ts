@@ -1,4 +1,4 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, InSub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency } from './Dependency'
+import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, Sub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency, InItem, WrapSub, SubItem } from './Dependency'
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
 import { ChildGraph, DepPair, EdgeSource, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
@@ -108,17 +108,15 @@ type DepsForKeySimpleDep<
     // The above cases should have handled all SimpleDendency values
     UnableToResolve<['DepsForKeySimpleDep', K]>
 
-type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
+type DepsForKeyInItem<G extends ProvideGraph, K extends InItem> =
     K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
-    K extends InSub<any, never> ? never :
-    K extends InSub<infer GSub, infer D> ? WrapIn<Merge<G, GSub>, D> :
-    K extends In<infer G2, infer D> ? WrapIn<G2, DepsForKeySimpleDep<G2, D>> :
-    UnableToResolve<['DepsForKeyCyclicItem', K]>
+    K extends Sub<infer GSub, infer D> ? WrapSub<GSub, DepsForKeyInItem<Merge<G, GSub>, D>> :
+    UnableToResolve<['DepsForKeyInItem', K]>
 
-type DepsForScope<G extends ProvideGraph, K extends Scope> =
-    Scope extends K ? UnableToResolve<['KeyTooBroad', K]> :
-    K extends AllKeys<G> ? never :
-    UnableToResolve<Missing<K>>
+type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
+    K extends InItem ? DepsForKeyInItem<G, K> :
+    K extends In<infer G2, infer D> ? WrapIn<G2, DepsForKeyInItem<G2, D>> :
+    UnableToResolve<['DepsForKeyCyclicItem', K]>
 
 type _DepsForKeyStep<
     G extends ProvideGraph,
@@ -126,12 +124,12 @@ type _DepsForKeyStep<
 > =
     K extends FailedDependency ? K :
     K extends CyclicItem ? DepsForKeyCyclicItem<G, K> :
-    K extends Scope ? DepsForScope<G, K> :
     K extends CyclicDependency<infer K2, infer C, infer E> ? ToCyclic<
         ApplyCyclic<DepsForKeyCyclicItem<G, K2>, C, E>,
         C,
         E
     > :
+    K extends Scope ? never :
     UnableToResolve<['DepsForKeyStep', K]>
 
 type DepsForKeyStep<
