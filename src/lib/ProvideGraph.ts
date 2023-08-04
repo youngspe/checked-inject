@@ -1,11 +1,17 @@
 
 // Dependency pair
 
-import { Dependency } from './Dependency'
+import { BaseResource, Dependency, IsSync, ShouldDetectCycles } from './Dependency'
 import { Scope, ScopeList } from './Scope'
 
+export type EdgeSource =
+    | BaseResource
+    | Scope
+    | IsSync<any>
+    | ShouldDetectCycles
+
 /** @ignore */
-export interface DepPair<out K extends Dependency, D extends Dependency> {
+export interface DepPair<out K extends EdgeSource, D extends Dependency> {
     deps: D
     key: K
 }
@@ -16,7 +22,7 @@ export interface WithScope<Scp extends Scope> {
 }
 
 /** @ignore */
-export interface GraphPairs extends DepPair<any, any> { }
+export interface GraphPairs extends DepPair<EdgeSource, Dependency> { }
 
 interface BaseProvideGraph<Pairs extends GraphPairs = GraphPairs> {
     pairs: Pairs

@@ -1,6 +1,6 @@
 import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, InSub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency } from './Dependency'
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
-import { ChildGraph, DepPair, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
+import { ChildGraph, DepPair, EdgeSource, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from './TypeKey'
 
@@ -27,11 +27,11 @@ export type CanRequest<
     Sync extends Dependency = IsSyncDepsOf<K>,
 > = ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
-type GraphWithKeys<K extends Dependency> =
+type GraphWithKeys<K extends EdgeSource> =
     | FlatGraph<K extends any ? DepPair<K, any> : never>
     | ChildGraph<GraphWithKeys<K>, K extends any ? DepPair<K, any> : never>
 
-type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
+export type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
 
 type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, D> extends never ? (
     P extends ChildGraph<infer Parent> ? _FindGraphWithDep<Parent, D> : never
@@ -93,38 +93,46 @@ type DepsForKeyIsSync<
 > =
     K2 extends KeyWithoutDefault ? never :
     K2 extends KeyWithDefault<infer _T, any, infer Sync> ? DepsForKeyScoped<P, K2, Sync, false> :
+    // The above cases should have handled all BaseResource values
     UnableToResolve<['DepsForKeyIsSync', K]>
 
 type DepsForKeySimpleDep<
-    P extends ProvideGraph,
+    G extends ProvideGraph,
     K extends SimpleDependency,
 > =
+    [K] extends [Extract<SimpleDependency, K>] ? UnableToResolve<['KeyTooBroad', K]> :
+    K extends AllKeys<G> ? DepsForKeyTransitive<G, K> :
     K extends KeyWithoutDefault ? Missing<K> :
-    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<P, K, D, true> :
-    K extends IsSync<infer K2> ? DepsForKeyIsSync<P, K2, K> :
-    Missing<K>
+    K extends KeyWithDefault<infer _T, infer D, any> ? DepsForKeyScoped<G, K, D, true> :
+    K extends IsSync<infer K2> ? DepsForKeyIsSync<G, K2, K> :
+    // The above cases should have handled all SimpleDendency values
+    UnableToResolve<['DepsForKeySimpleDep', K]>
 
 type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
+    K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
     K extends InSub<any, never> ? never :
     K extends InSub<infer GSub, infer D> ? WrapIn<Merge<G, GSub>, D> :
     K extends In<infer G2, infer D> ? WrapIn<G2, DepsForKeySimpleDep<G2, D>> :
-    K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
-    never
+    UnableToResolve<['DepsForKeyCyclicItem', K]>
+
+type DepsForScope<G extends ProvideGraph, K extends Scope> =
+    Scope extends K ? UnableToResolve<['KeyTooBroad', K]> :
+    K extends AllKeys<G> ? never :
+    UnableToResolve<Missing<K>>
 
 type _DepsForKeyStep<
     G extends ProvideGraph,
     K extends Dependency,
 > =
     K extends FailedDependency ? K :
-    Dependency extends K ? UnableToResolve<['DepsForKey', K]> :
-    K extends AllKeys<G> ? DepsForKeyTransitive<G, K> :
+    K extends CyclicItem ? DepsForKeyCyclicItem<G, K> :
+    K extends Scope ? DepsForScope<G, K> :
     K extends CyclicDependency<infer K2, infer C, infer E> ? ToCyclic<
         ApplyCyclic<DepsForKeyCyclicItem<G, K2>, C, E>,
         C,
         E
     > :
-    K extends CyclicItem ? DepsForKeyCyclicItem<G, K> :
-    Missing<K>
+    UnableToResolve<['DepsForKeyStep', K]>
 
 type DepsForKeyStep<
     P extends ProvideGraph,
