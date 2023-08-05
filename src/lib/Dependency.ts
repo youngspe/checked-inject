@@ -38,15 +38,19 @@ export declare abstract class CyclicDependency<
 }
 
 type _DistributeCyclicCSub<G extends ProvideGraph, D extends InItem> =
-    D extends BaseResource ? Sub<G, D> :
+    D extends CyclicCUnit ? Sub<G, D> :
+    never
+
+type _DistributeCyclicCIn<G extends ProvideGraph, D extends InItem> =
+    D extends CyclicCUnit ? In<G, D> :
     D extends Sub<infer G2, infer D2> ? _DistributeCyclicCSub<G2, D2> :
     never
 
 type _DistributeCyclicC<D extends CyclicItem> =
-    D extends BaseResource ? D :
+    D extends CyclicCUnit ? D :
     D extends In<infer G, infer D2> ? (
         D2 extends BaseResource ? In<G, D2> :
-        D2 extends Sub<infer G2, infer D3> ? _DistributeCyclicCSub<G2, D3> :
+        D2 extends Sub<infer G2, infer D3> ? _DistributeCyclicCIn<G2, D3> :
         never
     ) :
     D extends Sub<infer G, infer D2> ? (
@@ -61,52 +65,49 @@ type DistributeCyclicC<D extends Dependency> =
     D extends CyclicItem ? _DistributeCyclicC<D> :
     never
 
-export type CyclicItem = SimpleDependency | In<any, any> | Sub<any, any>
-type CyclicC<B extends BaseResource = BaseResource> = B | In<any, B> | Sub<any, B>
+export type CyclicItem =
+    | InItem
+    | In<any, any>
+
+type CyclicCUnit = BaseResource | IsSync<BaseResource>
+type CyclicC<B extends CyclicCUnit = CyclicCUnit> = B | In<any, B> | Sub<any, B>
 type ExpandCyclicC<C extends Dependency> = C extends CyclicC<infer B> ? B : never
 
-type InValue<C extends CyclicC> = C extends In<infer B> ? B : never
-
-export type ApplyCyclicIn<G extends ProvideGraph, D extends InItem, C extends CyclicC> =
-    | _WrapIn<G, (
-        D extends In
-    )
-        | Exclude<D, (C extends In<G, infer C2> ? C2 : never) | Sub<any, any>>
-        | (
-            D extends Sub<infer G2, infer D2> ? ApplyCyclicSub<G2, D2, C> :
-            never
-        )
-    >
-
-type SubValue<C extends CyclicC> = C extends Sub<infer B> ? B : never
-
-export type ApplyCyclicSub<G extends ProvideGraph, D extends SubItem, C extends CyclicC> =
-    | _WrapSub<G, Exclude<D, SubValue<C>>>
-
-export type ApplyCyclicInError<G extends ProvideGraph, D extends InItem, E extends CyclicC> =
-    D extends Sub<infer G2, infer D2> ? ApplyCyclicSubError<G2, D2, E> :
-    D extends CyclicC<infer B> ? (
-        D extends (E extends In<G, infer E2> ? E2 : never) ? CycleDetected<B> :
-        never
-    ) :
+type InValue<C extends CyclicC, G extends ProvideGraph = any> =
+    C extends In<G, infer B> ? B :
+    C extends In<any, any> | Sub<any, any> ? C :
     never
 
-export type ApplyCyclicSubError<G extends ProvideGraph, D extends SubItem, E extends CyclicC> =
-    D extends (E extends Sub<G, infer E2> ? E2 : never) ? CycleDetected<ExpandCyclicC<D>> :
+export type ApplyCyclicIn<G extends ProvideGraph, D extends InItem, C extends CyclicC, _C extends CyclicC = InValue<C>> =
+    | InChecked<G,
+        D extends Sub<infer G2, infer D2> ? ApplyCyclicSub<G2, D2, C> :
+        D extends _C ? never :
+        D
+    >
+
+type SubValue<C extends CyclicC, G extends ProvideGraph = any> =
+    C extends Sub<G, infer B> ? B :
+    C extends In<any, any> | Sub<any, any> ? C :
+    never
+
+export type ApplyCyclicSub<G extends ProvideGraph, D extends SubItem, C extends CyclicC, _C = SubValue<C>> =
+    | SubChecked<G, Exclude<D, _C>>
+
+export type ApplyCyclicInError<G extends ProvideGraph, D extends InItem, E extends CyclicC, _E extends CyclicC = InValue<E, G>> =
+    D extends Sub<infer G2, infer D2> ? ApplyCyclicSubError<G2, D2, E> :
+    D extends E ? CycleDetected<ExpandCyclicC<D>> :
+    never
+
+export type ApplyCyclicSubError<G extends ProvideGraph, D extends SubItem, E extends CyclicC, _E extends CyclicC = SubValue<E, G>> =
+    D extends E ? CycleDetected<ExpandCyclicC<D>> :
     never
 
 export type ApplyCyclic<D extends Dependency, C extends CyclicC, E extends CyclicC> =
-    | (
-        D extends E ? CycleDetected<ExpandCyclicC<D>> :
-        D extends C ? never :
-        D extends In<infer G, infer D2> ? ApplyCyclicIn<G, D2, C> | ApplyCyclicInError<G, D2, E> :
-        D extends Sub<infer G, infer D2> ? ApplyCyclicSub<G, D2, C> | ApplyCyclicSubError<G, D2, E> :
-        D
-    )
-    | (DistributeCyclicC<D> extends infer D1 ? (
-        D1 extends E ? D1 : never
-    ) : never)
-
+    D extends E ? CycleDetected<ExpandCyclicC<D>> :
+    D extends C ? never :
+    D extends In<infer G, infer D2> ? ApplyCyclicIn<G, D2, C> | ApplyCyclicInError<G, D2, E> :
+    D extends Sub<infer G, infer D2> ? ApplyCyclicSub<G, D2, C> | ApplyCyclicSubError<G, D2, E> :
+    D
 
 type _ToCyclic<D extends CyclicItem, C extends CyclicC, E extends CyclicC> =
     [D] extends [never] ? never :
@@ -132,9 +133,44 @@ export type ToCyclic<D extends Dependency, C extends CyclicC, E extends CyclicC>
 /** @ignore */
 export type AllowCycles<D extends Dependency> = ToCyclic<D, DistributeCyclicC<D>, never>
 
+type DetectCyclesSubItem<D extends InItem, C extends CyclicC = DistributeCyclicC<D>> =
+    | _ToCyclic<Exclude<Extract<D, CyclicCUnit>, BaseResource>, C, never>
+    | (
+        D extends BaseResource ? CyclicDependency<D, C, D> :
+        D extends CyclicCUnit ? never :
+        D
+    )
+
+type DetectCyclesInItem<D extends InItem, C extends CyclicC = DistributeCyclicC<D>> =
+    | DetectCyclesSubItem<Extract<D, SubItem>, C>
+    | (
+        D extends Sub<infer G, infer D2> ? WrapSub<G, DetectCyclesSubItem<D2>> :
+        never
+    )
+
+type DetectCyclesCyclicItem<D extends CyclicItem, C extends CyclicC = DistributeCyclicC<D>> =
+    | DetectCyclesInItem<Extract<D, InItem>, C>
+    | (
+        D extends In<infer G, infer D2> ? WrapIn<G, DetectCyclesInItem<D2>> :
+        never
+    )
+
+export type _DetectCycles<D extends CyclicItem | CyclicDependency<any, any, any>, C extends CyclicC = DistributeCyclicC<D>> =
+    | DetectCyclesCyclicItem<Extract<D, CyclicItem>, C>
+    | (
+        D extends CyclicItem ? DetectCyclesCyclicItem<D> :
+        never
+    )
+
 /** @ignore */
-// export type DetectCycles<D extends Dependency> = ToCyclic<D, DistributeCyclicC<D>, DistributeCyclicC<D>>
-export type DetectCycles<D extends Dependency> = ToCyclic<D, DistributeCyclicC<D>, DistributeCyclicC<D>>
+export type DetectCycles<D extends Dependency> =
+    | _DetectCycles<Extract<D, CyclicItem | CyclicDependency<any, any, any>>>
+    | Exclude<D, CyclicItem | CyclicDependency<any, any, any>>
+// D extends CyclicDependency<infer D2, infer C2, infer E2> ? ToCyclic<
+//     DetectCyclesCyclicItem<D2, _C>, C2, E2
+// > :
+// D extends CyclicItem ? DetectCyclesCyclicItem<D, _C> :
+// D
 
 /** @ignore */
 export declare abstract class Missing<in out K extends Dependency> {
@@ -149,20 +185,19 @@ export declare abstract class Sub<G extends ProvideGraph, D extends SubItem> {
 export type SubItem =
     | SimpleDependency
 
-type _WrapSub<G extends ProvideGraph, D extends SubItem> =
-    [D] extends never ? never :
-    Sub<G, D>
+type SubChecked<G extends ProvideGraph, D extends SubItem> =
+    [D] extends [never] ? never : Sub<G, D>
 
 type SubFlat<G extends ProvideGraph, D extends CyclicItem> =
-    | _WrapSub<G, Extract<D, SubItem>>
+    | SubChecked<G, Extract<D, SubItem>>
     | (
         D extends In<any, any> ? D :
-        D extends Sub<infer G2, infer D2> ? _WrapSub<Merge<G, G2>, D2> :
+        D extends Sub<infer G2, infer D2> ? SubChecked<Merge<G, G2>, D2> :
         never
     )
 
 export type WrapSub<G extends ProvideGraph, D extends Dependency> =
-    | _WrapSub<G, Extract<D, SubItem>>
+    | SubChecked<G, Extract<D, SubItem>>
     | (
         D extends SubItem ? never :
         D extends CyclicItem ? SubFlat<G, D> :
@@ -180,21 +215,20 @@ export declare abstract class In<G extends ProvideGraph, D extends InItem> {
 }
 
 export type InItem =
-    | SimpleDependency
+    | SubItem
     | Sub<any, any>
 
-type InFlat<G extends ProvideGraph, D extends CyclicItem | FailedDependency> =
-    | _WrapIn<G, Exclude<D, In<any, any>>>
+type InFlat<G extends ProvideGraph, D extends CyclicItem> =
+    | InChecked<G, Exclude<D, In<any, any>>>
     | (D extends In<any, any> ? D : never)
 
-type _WrapIn<G extends ProvideGraph, D extends InItem | FailedDependency> =
-    [D] extends [never] ? never :
-    In<G, Extract<D, SimpleDependency>>
+export type InChecked<G extends ProvideGraph, D extends InItem | FailedDependency> =
+    [D] extends [never] ? never : In<G, Exclude<D, FailedDependency>>
 
 
 /** @ignore */
 export type WrapIn<G extends ProvideGraph, D extends Dependency> =
-    | _WrapIn<G, Extract<D, InItem>>
+    | InChecked<G, Extract<D, InItem>>
     | (
         D extends InItem ? never :
         D extends CyclicDependency<infer K, infer C, infer E> ? _ToCyclic<
@@ -205,7 +239,7 @@ export type WrapIn<G extends ProvideGraph, D extends Dependency> =
         D
     )
 
-export declare abstract class CycleDetected<C extends BaseResource> {
+export declare abstract class CycleDetected<C extends CyclicCUnit> {
     private _: C
 }
 

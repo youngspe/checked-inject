@@ -1,11 +1,11 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, Sub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency, InItem, WrapSub, SubItem } from './Dependency'
+import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, Sub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency, InItem, WrapSub, SubItem, InChecked } from './Dependency'
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
 import { ChildGraph, DepPair, EdgeSource, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from './TypeKey'
 
-type UseCycleDetection<G extends ProvideGraph, D extends Dependency> =
-    ShouldDetectCycles extends AllKeys<G> ? DetectCycles<D> :
+type UseCycleDetection<CheckCycles extends boolean, D extends Dependency> =
+    CheckCycles extends true ? DetectCycles<D> :
     D
 
 type UnresolvedKeys<
@@ -33,24 +33,25 @@ type GraphWithKeys<K extends EdgeSource> =
 
 export type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ? K : never
 
-type _FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, D> extends never ? (
-    P extends ChildGraph<infer Parent> ? _FindGraphWithDep<Parent, D> : never
-) : P
+type _FindGraphWithDep<P extends ProvideGraph, D extends SimpleDependency | Scope> =
+    P extends ChildGraph<infer Parent> ? (
+        (D extends KeysOf<P> ? never : false) extends true ? P : _FindGraphWithDep<Parent, D>
+    ) : P
 
 type ExcludeBroad<D extends Dependency> = D extends Extract<Dependency, D> ? never : D
 
-type FindGraphWithDep<P extends ProvideGraph, D extends Dependency> = _FindGraphWithDep<P, ExcludeBroad<D>>
+type FindGraphWithDep<P extends ProvideGraph, D extends SimpleDependency | Scope> = _FindGraphWithDep<P, ExcludeBroad<D>>
 type IntersectKeyOf<P extends ProvideGraph, D extends Dependency> = Extract<KeysOf<P>, ExcludeBroad<D>>
 
 type CheckHasScopes<G extends ProvideGraph, Scp extends Scope> = Scp extends AllKeys<G> ? never : Missing<Scp>
 
 type DepsForKeyTransitive<
     PRoot extends ProvideGraph,
-    K extends Dependency,
+    K extends SimpleDependency,
     PCurrent extends ProvideGraph = PRoot,
     Pairs extends GraphPairs = PairsOf<PCurrent>,
 > =
-    K extends KeysOf<PCurrent> ? (Pairs extends DepPair<K, infer D> ? (
+    K extends Pairs['key'] ? (Pairs extends DepPair<K, infer D> ? (
         Pairs extends WithScope<infer Scp> ? (
             CheckHasScopes<PRoot, Extract<Scp, D>> extends infer HS extends Dependency ? (
                 [HS] extends [never] ? (
@@ -110,7 +111,7 @@ type DepsForKeySimpleDep<
 
 type DepsForKeyInItem<G extends ProvideGraph, K extends InItem> =
     K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
-    K extends Sub<infer GSub, infer D> ? WrapSub<GSub, DepsForKeyInItem<Merge<G, GSub>, D>> :
+    K extends Sub<infer GSub, infer D> ? InChecked<Merge<G, GSub>, D> :
     UnableToResolve<['DepsForKeyInItem', K]>
 
 type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
@@ -138,9 +139,10 @@ type DepsForKeyStep<
 > = _DepsForKeyStep<P, ValidateDep<K>>
 
 type DepsForKey<
-    P extends ProvideGraph,
+    G extends ProvideGraph,
     K extends Dependency,
-> = [K] extends [FailedDependency] ? K : DepsForKey<P, DepsForKeyStep<P, UseCycleDetection<P, K>>>
+    CheckCycles extends boolean = ShouldDetectCycles extends AllKeys<G> ? true : false,
+> = [K] extends [FailedDependency] ? K : DepsForKey<G, DepsForKeyStep<G, UseCycleDetection<CheckCycles, K>>>
 
 type ValidateDep<D extends Dependency> =
     D extends BaseTypeKey | Scope ? (
