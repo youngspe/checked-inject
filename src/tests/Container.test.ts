@@ -561,7 +561,7 @@ describe(Container, () => {
         })
     })
 
-    test('cyclic with Cyclic', () => {
+    test('cyclic with Cyclic', async () => {
         interface Custom1 { a: Custom2 }
         interface Custom2 { b: () => Custom1 }
         class CustomKey1 extends TypeKey<Custom1>() {
@@ -575,6 +575,11 @@ describe(Container, () => {
             .provide(CustomKey2, Inject.from({ b: CustomKey1.Cyclic().Lazy() }))
             .detectCycles()
         )
+
+        MyModule.inject([CustomKey2] as const, () => {
+
+        })
+        await _assertContainer(MyModule, { trace: true }).canRequest(CustomKey1)
 
         MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {
             expect(c1).toBe(c2.b())

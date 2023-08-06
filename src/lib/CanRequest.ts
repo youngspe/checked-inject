@@ -111,7 +111,7 @@ type DepsForKeySimpleDep<
 
 type DepsForKeyInItem<G extends ProvideGraph, K extends InItem> =
     K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
-    K extends Sub<infer GSub, infer D> ? InChecked<Merge<G, GSub>, D> :
+    K extends Sub<infer GSub, infer D> ? In<Merge<G, GSub>, D> :
     UnableToResolve<['DepsForKeyInItem', K]>
 
 type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
