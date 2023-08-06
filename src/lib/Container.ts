@@ -4,7 +4,7 @@ import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
 import { BaseResource, Dependency, IsSync, NotSync, RequireSync, ShouldDetectCycles } from './Dependency'
-import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey, ToBaseResource } from './DependencyKey'
+import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey, ToBaseResource, UnableToResolve, Trace } from './DependencyKey'
 import { Initializer, nameFunction } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
@@ -1050,19 +1050,37 @@ export namespace Container {
 
 interface Invariant<in out T> { }
 
+
+
 /**
  * @ignore
  * @internal
  */
-export function _assertContainer<G extends Container.Graph>(ct: Container<G> | Module<G>) {
+export interface _AssertContainerOptions {
+    readonly trace?: true | false
+}
+
+/**
+ * @ignore
+ * @internal
+ */
+export function _assertContainer<
+G extends Container.Graph,
+O extends _AssertContainerOptions = {},
+>(
+    ct: Container<G> | Module<G>,
+    options?: O,
+    ) {
+    type X =
+        | (O extends { trace: true } ? Trace : never)
     return {
         [unresolved]: undefined as void,
         async canRequest<K extends DependencyKey>(
             this: (
-                & CanRequest<G, K>
-                & CanRequest<G, K, never>
-                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>
-                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>
+                & CanRequest<G, K | X>
+                & CanRequest<G, K | X, never>
+                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X>
+                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>
             ),
             key: K
         ) {
@@ -1071,9 +1089,9 @@ export function _assertContainer<G extends Container.Graph>(ct: Container<G> | M
         },
 
         async cannotRequestSync<K extends DependencyKey>(
-            this: CanRequest<G, K, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>,
+            this: CanRequest<G, K | X, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>,
             key: K,
-            _because?: Invariant<CanRequest<G, K> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>>,
+            _because?: Invariant<CanRequest<G, K | X> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>>,
         ) {
             try {
                 ct.requestUnchecked(key)
@@ -1083,7 +1101,7 @@ export function _assertContainer<G extends Container.Graph>(ct: Container<G> | M
         },
         async cannotRequest<K extends DependencyKey>(
             key: K,
-            _because?: Invariant<CanRequest<G, K, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K, never>>,
+            _because?: Invariant<CanRequest<G, K | X, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>>,
         ) {
             try {
                 await ct.requestAsyncUnchecked(key)

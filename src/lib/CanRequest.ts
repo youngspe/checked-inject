@@ -1,11 +1,11 @@
-import { Dependency, IsSync, FailedDependency, CyclicDependency, Missing, Sub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, ToCyclic, SimpleDependency, CyclicItem, OkDependency, InItem, WrapSub, SubItem, InChecked } from './Dependency'
-import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve } from './DependencyKey'
+import { Dependency, IsSync, FailedDependency, CyclicDep, Missing, Sub, In, WrapIn, ApplyCyclic, DetectCycles, ShouldDetectCycles, BaseResource, WrapCyclic, SimpleDependency, CyclicItem, OkDependency, InItem, WrapSub, SubItem, InChecked } from './Dependency'
+import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve, Trace } from './DependencyKey'
 import { ChildGraph, DepPair, EdgeSource, FlatGraph, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
 import { BaseTypeKey, KeyWithDefault, KeyWithoutDefault } from './TypeKey'
 
 type UseCycleDetection<CheckCycles extends boolean, D extends Dependency> =
-    CheckCycles extends true ? DetectCycles<D> :
+    [CheckCycles] extends [true] ? DetectCycles<D> :
     D
 
 type UnresolvedKeys<
@@ -25,7 +25,7 @@ export type CanRequest<
     P extends ProvideGraph,
     K extends DependencyKey,
     Sync extends Dependency = IsSyncDepsOf<K>,
-> = ([UnresolvedKeys<P, K, Sync>] extends [infer E] ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
+> = (UnresolvedKeys<P, K, Sync> extends infer E ? ([E] extends [never] ? unknown : RequestFailed<E>) : never)
 
 type GraphWithKeys<K extends EdgeSource> =
     | FlatGraph<K extends any ? DepPair<K, any> : never>
@@ -122,16 +122,19 @@ type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
 type _DepsForKeyStep<
     G extends ProvideGraph,
     K extends Dependency,
-> =
+    _K extends Dependency = K,
+> = Extract<K, Trace<any[] & { length: 10 }>> extends never ? (
+    K extends Trace<infer X> ? Trace<readonly [...X, Exclude<_K, Trace>]> :
     K extends FailedDependency ? K :
     K extends CyclicItem ? DepsForKeyCyclicItem<G, K> :
-    K extends CyclicDependency<infer K2, infer C, infer E> ? ToCyclic<
+    K extends CyclicDep<infer K2, infer C, infer E> ? WrapCyclic<
         ApplyCyclic<DepsForKeyCyclicItem<G, K2>, C, E>,
         C,
         E
     > :
     K extends Scope ? never :
     UnableToResolve<['DepsForKeyStep', K]>
+) : Extract<K, Trace>
 
 type DepsForKeyStep<
     P extends ProvideGraph,

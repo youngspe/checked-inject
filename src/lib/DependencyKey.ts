@@ -53,6 +53,7 @@ export type Target<K extends DependencyKey, G extends Container.Graph = never> =
     K extends OnlyObject<DependencyKey> ? ObjectTarget<K, G> :
     K extends undefined ? undefined : K extends null ? null :
     K extends void ? void :
+    K extends Trace ? never :
     never
 
 type ArrayTarget<K extends readonly DependencyKey[], G extends Container.Graph> =
@@ -103,6 +104,13 @@ export abstract class UnableToResolveIsSync<in out K> {
 }
 
 /** @ignore */
+export abstract class Trace<K extends readonly any[] = readonly any[]> {
+    private _k!: K
+    constructor(_: never) { }
+}
+
+
+/** @ignore */
 export abstract class NotDistinct<in out K> {
     private _i!: K
 }
@@ -112,6 +120,7 @@ export type ToBaseResource<K extends ResourceKey> = K extends InjectableClass ? 
 /** @ignore */
 export type DepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
+    K extends Trace ? Trace<[]> :
     K extends ResourceKey ? ToBaseResource<K> :
     K extends DependencyKey.Of<infer _T, never> ? never :
     K extends DependencyKey.Of<infer _T, infer D> ? D :
@@ -122,6 +131,7 @@ export type DepsOf<K extends DependencyKey> =
 /** @ignore */
 export type IsSyncDepsOf<K extends DependencyKey> =
     [DependencyKey] extends [K] ? UnableToResolve<K> :
+    K extends Trace ? Trace<[]> :
     K extends ResourceKey ? IsSync<ToBaseResource<K>> :
     K extends DependencyKey.Of<infer _T, any, never> ? never :
     K extends DependencyKey.Of<infer _T, any, infer D> ? D :
@@ -303,6 +313,7 @@ export type DependencyKey =
     | HasTypeKeySymbol<any>
     | PrivateConstruct
     | null | undefined | void
+    | Trace
 
 /**
  * @group Dependencies
@@ -313,5 +324,5 @@ export namespace DependencyKey {
         | SimpleKey<T, D, Sync>
         | InjectableClass<T>
         | StructuredKey<T, D, Sync>
-        | (T extends (null | undefined | void) ? T : never)
+        | (T extends (null | undefined | void | Trace) ? T : never)
 }
