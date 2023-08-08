@@ -147,7 +147,6 @@ describe(Module, () => {
         Keys.UserInfo1 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
         Keys.UserInfo2 = class extends TypeKey<{ a: UserInfo, b: UserInfo }>() { private _: any }
 
-        // TODO: put Cyclic back in, figure out why we're not getting errors:
         const UserModule = Module(ct => ct
             .provide(Keys.UserInfo1, Keys.Subcomponent.Resolve({
                 a: Keys.UserInfo,
@@ -158,7 +157,7 @@ describe(Module, () => {
             })
             .provide(Keys.UserInfo2, UserScope, {
                 a: Keys.UserInfo,
-                b: Keys.UserInfo2.Cyclic().Lazy(),
+                b: Keys.UserInfo2.Lazy(),
             }, ({ a, b }) => ({ a, get b() { return b().a } })
             )
         )
@@ -168,6 +167,7 @@ describe(Module, () => {
             .detectCycles()
         )
 
+        // TODO: figure out why out2 doesn't give us an error when Cyclic is removed:
         MyModule.inject({
             out1: Keys.UserInfo1,
             out2: Keys.Subcomponent.Resolve(Keys.UserInfo2).Build('bob', '456'),

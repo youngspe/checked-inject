@@ -92,16 +92,24 @@ type CyclicChecked<D extends CyclicItem | FailedDependency, C extends CyclicC, E
     D extends CyclicItem ? CyclicDep<D, C, E> :
     D
 
+type FlattenCyclic<
+    D extends CyclicItem,
+    C1 extends CyclicC, C2 extends CyclicC,
+    E1 extends C1, E2 extends C2,
+> = D extends any ? (
+    CyclicDep<
+        D,
+        C1 | C2,
+        | Exclude<E1, C2>
+        | Exclude<E2, C1>
+        | Extract<E1, E2>
+    >
+) : never
+
 /** @ignore */
 export type WrapCyclic<D extends Dependency, C extends CyclicC, E extends C> =
     D extends CyclicItem ? CyclicChecked<D, C, E> :
-    D extends CyclicDep<infer D2, infer C2, infer E2> ? CyclicDep<
-        D2,
-        C | C2,
-        | Exclude<E, C2>
-        | Exclude<E2, C>
-        | Extract<E2, E>
-    > :
+    D extends CyclicDep<infer D2, infer C2, infer E2> ? FlattenCyclic<D2, C, C2, E, E2> :
     D
 
 /** @ignore */
@@ -109,26 +117,27 @@ export type AllowCycles<D extends Dependency> = WrapCyclic<D, ToCyclicC<D>, neve
 
 type _DetectCycles<
     D extends CyclicItem,
-    C extends CyclicC,
+    C1 extends CyclicC,
     C2 extends CyclicC,
-    E extends C2 = never,
+    E1 extends C1,
+    E2 extends C2,
 > =
     ExtractSub<D> extends infer DCyclic extends CyclicC ? (
-        DCyclic extends C2 | IsSync<any> ? CyclicChecked<D, C | C2, Exclude<E, DCyclic>> :
-        CyclicDep<D, DCyclic | C2, DCyclic | E>
+        DCyclic extends C2 ? FlattenCyclic<D, C1, C2, E1, E2> :
+        CyclicDep<D, DCyclic | C2, DCyclic | E2>
     ) :
     D
 
 /** @ignore */
-export type DetectCycles<D extends Dependency, _C extends CyclicC = ToCyclicC<D>> =
-    D extends CyclicItem ? _DetectCycles<D, _C, never, never> :
+export type DetectCycles<D extends Dependency, _C extends CyclicC = ToCyclicC<D>, _E extends _C = Exclude<_C, CyclicC<IsSync<any>>>> =
+    D extends CyclicItem ? _DetectCycles<D, _C, never, _E, never> :
     D extends CyclicDep<infer D2, infer C2, infer E2> ? (
-        _DetectCycles<D2, _C, C2, E2>
+        _DetectCycles<D2, _C, C2, _E, E2>
     ) :
     D
 
 /** @ignore */
-export declare abstract class Missing<in out K extends Dependency> {
+export declare abstract class Missing<K extends Dependency> {
     private _: K
 }
 

@@ -576,11 +576,6 @@ describe(Container, () => {
             .detectCycles()
         )
 
-        MyModule.inject([CustomKey2] as const, () => {
-
-        })
-        await _assertContainer(MyModule, { trace: true }).canRequest(CustomKey1)
-
         MyModule.inject([CustomKey1, CustomKey2] as const, ([c1, c2]) => {
             expect(c1).toBe(c2.b())
         })

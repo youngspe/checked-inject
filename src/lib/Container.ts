@@ -1060,17 +1060,13 @@ export interface _AssertContainerOptions {
     readonly trace?: true | false
 }
 
-/**
- * @ignore
- * @internal
- */
-export function _assertContainer<
-G extends Container.Graph,
-O extends _AssertContainerOptions = {},
+function _assertContainer1<
+    G extends Container.Graph,
+    O extends _AssertContainerOptions = {},
 >(
     ct: Container<G> | Module<G>,
     options?: O,
-    ) {
+) {
     type X =
         | (O extends { trace: true } ? Trace : never)
     return {
@@ -1114,6 +1110,32 @@ O extends _AssertContainerOptions = {},
             } catch { }
         },
     }
+}
+
+export function _assertContainer<
+    G extends Container.Graph,
+    O extends _AssertContainerOptions = {},
+>(ct: Module<G>, options?: O): ReturnType<
+    typeof _assertContainer1<Merge<Container.DefaultGraph, G>, O>
+>
+
+export function _assertContainer<
+    G extends Container.Graph,
+    O extends _AssertContainerOptions = {},
+>(ct: Container<G>, options?: O): ReturnType<typeof _assertContainer1<G, O>>
+
+/**
+ * @ignore
+ * @internal
+ */
+export function _assertContainer<
+    G extends Container.Graph,
+    O extends _AssertContainerOptions = {},
+>(
+    ct: Container<G> | Module<G>,
+    options?: O,
+) {
+    return _assertContainer1(ct, options)
 }
 
 /**

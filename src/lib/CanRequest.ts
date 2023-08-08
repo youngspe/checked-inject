@@ -35,7 +35,7 @@ export type AllKeys<P extends ProvideGraph> = P extends GraphWithKeys<infer K> ?
 
 type _FindGraphWithDep<P extends ProvideGraph, D extends SimpleDependency | Scope> =
     P extends ChildGraph<infer Parent> ? (
-        (D extends KeysOf<P> ? never : false) extends true ? P : _FindGraphWithDep<Parent, D>
+        true extends (D extends KeysOf<P> ? true : false) ? P : _FindGraphWithDep<Parent, D>
     ) : P
 
 type ExcludeBroad<D extends Dependency> = D extends Extract<Dependency, D> ? never : D
@@ -69,7 +69,7 @@ type _DepsForKeyScoped<
     D extends Dependency,
     RequireScopeFilter extends Scope,
 > =
-    [Scp] extends never ? D :
+    [Scp] extends [never] ? D :
     CheckHasScopes<G, Extract<Scp, RequireScopeFilter>> extends infer HS extends Dependency ? ([HS] extends [never] ? (
         IntersectKeyOf<G, Scp> extends never ? WrapIn<FindGraphWithDep<G, Scp>, D> :
         WrapIn<G, D>
@@ -111,28 +111,42 @@ type DepsForKeySimpleDep<
 
 type DepsForKeyInItem<G extends ProvideGraph, K extends InItem> =
     K extends SimpleDependency ? DepsForKeySimpleDep<G, K> :
-    K extends Sub<infer GSub, infer D> ? In<Merge<G, GSub>, D> :
+    K extends Sub<infer GSub, infer D> ? WrapIn<Merge<G, GSub>, DepsForKeySimpleDep<Merge<G, GSub>, D>> :
     UnableToResolve<['DepsForKeyInItem', K]>
 
 type DepsForKeyCyclicItem<G extends ProvideGraph, K extends CyclicItem> =
     K extends InItem ? DepsForKeyInItem<G, K> :
+    K extends In<G, infer D> ? DepsForKeyInItem<G, D> :
     K extends In<infer G2, infer D> ? WrapIn<G2, DepsForKeyInItem<G2, D>> :
     UnableToResolve<['DepsForKeyCyclicItem', K]>
+
+type SimplifyDep<D extends Dependency> =
+    D extends In<any, infer D2> ? In<any, SimplifyDep<D2>> :
+    D extends Sub<any, infer D2> ? Sub<any, SimplifyDep<D2>> :
+    D extends CyclicDep<infer D2, infer C, infer E> ? CyclicDep<
+        SimplifyDep<D2>,
+        SimplifyDep<C>,
+        SimplifyDep<E>
+    > :
+    D
 
 type _DepsForKeyStep<
     G extends ProvideGraph,
     K extends Dependency,
     _K extends Dependency = K,
 > = Extract<K, Trace<any[] & { length: 10 }>> extends never ? (
-    K extends Trace<infer X> ? Trace<readonly [...X, Exclude<_K, Trace>]> :
+    K extends Trace<infer X> ? Trace<[...X, (
+        _K extends Trace ? never :
+        SimplifyDep<_K>
+    )]> :
     K extends FailedDependency ? K :
+    K extends Scope ? never :
     K extends CyclicItem ? DepsForKeyCyclicItem<G, K> :
     K extends CyclicDep<infer K2, infer C, infer E> ? WrapCyclic<
         ApplyCyclic<DepsForKeyCyclicItem<G, K2>, C, E>,
         C,
         E
     > :
-    K extends Scope ? never :
     UnableToResolve<['DepsForKeyStep', K]>
 ) : Extract<K, Trace>
 
