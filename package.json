@@ -1,6 +1,6 @@
 {
   "name": "checked-inject",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
