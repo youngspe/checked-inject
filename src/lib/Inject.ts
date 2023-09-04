@@ -4,8 +4,6 @@ import { Target, DependencyKey, IsSyncDepsOf, DepsOf } from './DependencyKey'
 import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { Initializer } from './_internal'
 import { ChildGraph, FlatGraph } from './ProvideGraph'
-import { TypeKey, FactoryKey } from './TypeKey'
-import { Injectable } from './InjectableClass'
 import { AllowCycles, WrapSub } from './Dependency'
 
 /**

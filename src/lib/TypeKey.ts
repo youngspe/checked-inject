@@ -4,7 +4,6 @@ import { AbstractKey } from './AbstractKey'
 import { Scope, ScopeList } from './Scope'
 import { DependencyKey, Target } from './DependencyKey'
 import { AbstractClass, Class, asMixin, isObject } from './_internal'
-import { Dependency } from './Dependency'
 import { ClassWithoutDefault, ClassWithDefault } from './InjectableClass'
 
 import TypeKeyClass = TypeKey.TypeKeyClass
@@ -76,14 +75,14 @@ export interface BaseTypeKeyWithoutDefault extends BaseTypeKey<any, never> { }
 /** @ignore */
 export interface BaseTypeKeyWithDefault<
     out T,
-    D extends Dependency,
-    Sync extends Dependency,
+    D,
+    Sync,
 > extends BaseTypeKey<T, ComputedKey<T, any, D, Sync>> { }
 
 /** @ignore */
 export type KeyWithoutDefault = BaseTypeKeyWithoutDefault | ClassWithoutDefault
 /** @ignore */
-export type KeyWithDefault<T, D extends Dependency, Sync extends Dependency> =
+export type KeyWithDefault<T, D, Sync> =
     | BaseTypeKeyWithDefault<T, D, Sync>
     | ClassWithDefault<T, D, Sync>
 
@@ -266,7 +265,7 @@ export function FactoryKey<
     ComputedKey.WithDepsOf<(...args: Args) => T, Inject.GetProvider<K>>
 > {
     if (args.length == 2) {
-        let [deps, fac] = args
+        const [deps, fac] = args
         return class extends TypeKey({
             default: Inject.map(Inject.provider(deps), d => (...args: Args) => fac(d(), ...args))
         }) {
@@ -332,7 +331,7 @@ export function AsyncFactoryKey<
     ComputedKey.WithDepsOf<(...args: Args) => Promise<T>, Inject.Async<K>>
 > {
     if (args.length == 2) {
-        let [deps, fac] = args
+        const [deps, fac] = args
         return class extends TypeKey({
             default: Inject.map(Inject.async(deps).Provider(), d => (...args: Args) => d().then(d => fac(d, ...args)))
         }) {

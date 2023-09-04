@@ -1,5 +1,5 @@
-import { BaseTypeKey, TypeKey } from './TypeKey'
-import { Scope, ScopeList } from './Scope'
+import { TypeKey } from './TypeKey'
+import { ScopeList } from './Scope'
 import { DependencyKey } from './DependencyKey'
 
 
@@ -30,18 +30,14 @@ function wrapMessage(err: InjectError) {
 
 /** Error thrown when a dependency's dependency has failed to resolve. */
 export class DependencyFailedError extends InjectError {
-    readonly cause: InjectError
-
-    constructor(cause: InjectError) {
+    constructor(public readonly cause: InjectError) {
         super(`Dependency failed: ${wrapMessage(cause)}`)
-        this.cause = cause
     }
 }
 
 /** Error thrown when a member of a structured dependency key failed to resolve. */
 export class InjectPropertyError extends InjectError {
-    readonly childErrors: { [K in keyof any]?: InjectError }
-    constructor(childErrors: { [K in keyof any]?: InjectError }) {
+    constructor(public readonly childErrors: { [K in keyof any]?: InjectError }) {
         super([
             '{',
             ...Object
@@ -55,19 +51,15 @@ export class InjectPropertyError extends InjectError {
 }
 
 export class DependencyCycleError extends InjectError {
-    readonly key: TypeKey
-    constructor(key: TypeKey) {
+    constructor(public readonly key: TypeKey) {
         super(`Dependency cycle while resolving ${key.fullName}`)
-        this.key = key
     }
 }
 
 /** Error thrown when a dependency is bound to a {@link Scope:type | Scope} that is unavailable. */
 export class ScopeUnavailableError extends InjectError {
-    readonly scope: ScopeList
-    constructor(scope: ScopeList) {
+    constructor(public readonly scope: ScopeList) {
         const message = `Scope ${ScopeList.flatten(scope).map(s => s.fullName).join('|')} unavailable`
         super(message)
-        this.scope = scope
     }
 }

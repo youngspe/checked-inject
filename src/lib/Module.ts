@@ -135,9 +135,9 @@ class ListModule<P extends ProvideGraph> extends BaseModule<P> {
     }
 
     override applyTo(ct: Container.Builder<any>) {
-        for (let item of this._items) {
+        for (const item of this._items) {
             if (item instanceof Array) {
-                for (let x of item) { ct.apply(x); }
+                for (const x of item) { ct.apply(x) }
             } else if (typeof item == 'function') {
                 item(ct)
             } else {
@@ -202,7 +202,8 @@ export namespace Module {
 
     /** {@link Container.Graph} produced by a module of type {@link M} */
     export type Provides<M> =
-        M extends ApplyTo<infer P> | FunctionItem<infer P> ? P :
+        M extends ApplyTo<infer P> ? P :
+        M extends FunctionItem<infer P> ? P :
         M extends readonly [infer A] ? Provides<A> :
         M extends readonly [infer A, ...infer B] ? Merge<Provides<A>, Provides<B>> :
         M extends [] ? EmptyGraph :

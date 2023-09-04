@@ -124,7 +124,7 @@ describe(Module, () => {
 
         MyModule.inject({
             out1: Keys.UserInfo1,
-            out2: Keys.UserInfo2
+            out2: Keys.UserInfo2,
         }, ({ out1, out2 }) => {
             expect(out1).toEqual({ userName: 'alice', userId: '123' })
             expect(out2).toEqual({ userName: 'bob', userId: '456' })
@@ -157,17 +157,15 @@ describe(Module, () => {
             })
             .provide(Keys.UserInfo2, UserScope, {
                 a: Keys.UserInfo,
-                b: Keys.UserInfo2.Lazy(),
+                b: Keys.UserInfo2.Cyclic().Lazy(),
             }, ({ a, b }) => ({ a, get b() { return b().a } })
             )
         )
 
         const MyModule = Module(UserModule, ct => ct
             .provide(Keys.UserInfo, UserScope, Inject.from({ userId: Keys.UserId, userName: Keys.UserName }))
-            .detectCycles()
         )
 
-        // TODO: figure out why out2 doesn't give us an error when Cyclic is removed:
         MyModule.inject({
             out1: Keys.UserInfo1,
             out2: Keys.Subcomponent.Resolve(Keys.UserInfo2).Build('bob', '456'),
@@ -198,7 +196,7 @@ describe(Module, () => {
         class BarKey extends TypeKey<() => Bar>() { private _: any }
         class Bar {
             private _: any
-            static Factory = class extends FactoryKey(LazyKey(() => ({
+            static Factory = class BarFactory extends FactoryKey(LazyKey(() => ({
                 foo: BaseFoo.Lazy(),
                 baz: MySubcomponent.Resolve(Baz).Lazy(),
             })), () => new Bar()) { private _: any }
@@ -211,11 +209,10 @@ describe(Module, () => {
         }
 
         const MyModule = Module(ct => ct
-            .bind(BaseFoo, Foo)
+            .bind(BaseFoo, Foo.Cyclic())
             .bind(BarKey, Bar.Factory)
-            // .detectCycles()
         )
 
-        MyModule.container().request(Foo)
+        _assertContainer(MyModule).canRequest(Foo)
     })
 })

@@ -1,10 +1,8 @@
 import { Container } from './Container'
 import { InjectError } from './InjectError'
-import { Dependency } from './Dependency'
 import { DependencyKey, DepsOf, Target, IsSyncDepsOf } from './DependencyKey'
 import { AbstractKey } from './AbstractKey'
 import { Initializer } from './_internal'
-import { Inject } from './Inject'
 
 declare const _computedKeySymbol: unique symbol
 
@@ -26,8 +24,8 @@ export interface HasComputedKeySymbol<out T, D = any, Sync = any> {
 export abstract class ComputedKey<
     T = any,
     K extends DependencyKey = any,
-    D extends Dependency = any,
-    Sync extends Dependency = any,
+    D = any,
+    Sync = any,
     P extends Container.Graph = any,
 > extends AbstractKey implements HasComputedKeySymbol<T, D, Sync> {
     /** @ignore */
@@ -46,8 +44,8 @@ export abstract class ComputedKey<
 export abstract class BaseComputedKey<
     out T,
     out K extends DependencyKey,
-    D extends Dependency = DepsOf<K>,
-    Sync extends Dependency = IsSyncDepsOf<K>,
+    D = DepsOf<K>,
+    Sync = IsSyncDepsOf<K>,
     P extends Container.Graph = never,
 > extends ComputedKey<T, K, D, Sync, P> {
     readonly inner: K
@@ -76,7 +74,8 @@ class _LazyKey<K extends DependencyKey> extends ComputedKey<
     Target<K>,
     K,
     DepsOf<K>,
-    IsSyncDepsOf<K>
+    IsSyncDepsOf<K>,
+    never
 > {
     private _f: (() => K) | null
     private _inner: K | null = null

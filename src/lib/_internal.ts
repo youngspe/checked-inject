@@ -1,5 +1,5 @@
 abstract class PrivateConstructClass {
-    protected constructor(...args: any[]) { }
+    protected constructor(..._args: any[]) { }
 }
 
 type _PrivateConstruct = typeof PrivateConstructClass
@@ -8,19 +8,19 @@ export interface PrivateConstruct extends _PrivateConstruct { }
 
 export type AbstractClass<T = any, Args extends any[] = any[]> = abstract new (...args: Args) => T
 
-export interface Class<T = any> extends PrivateConstruct { prototype: T }
+export interface Class<T = any> extends PrivateConstruct { readonly prototype: T }
 
 export type CanMixinFrom<M> = object & { readonly [K in keyof M]?: M[K] }
 
 interface ProtoCanMixin<M extends { prototype: any }> extends AbstractClass {
-    prototype: CanMixinFrom<M['prototype']>
+    readonly prototype: CanMixinFrom<M['prototype']>
 }
 
 export type CanMixinFromClass<M extends { prototype: any }> = ProtoCanMixin<M> & CanMixinFrom<Omit<M, 'prototype'>>
 
 export type MixedIn<T extends CanMixinFrom<M>, M> = T & Omit<M, keyof T>
 
-export function mixinObject<T extends CanMixinFrom<M>, M extends {}>(target: T, rhs: M): asserts target is MixedIn<T, M> {
+export function mixinObject<T extends CanMixinFrom<M>, M extends object>(target: T, rhs: M): asserts target is MixedIn<T, M> {
     const descriptors: PropertyDescriptorMap = {}
     for (let src: object | null = rhs; src != null; src = Object.getPrototypeOf(src)) {
         [...Object.getOwnPropertyNames(src), ...Object.getOwnPropertySymbols(src)].forEach(p => {
@@ -32,11 +32,11 @@ export function mixinObject<T extends CanMixinFrom<M>, M extends {}>(target: T, 
     Object.setPrototypeOf(target, newProto)
 }
 
-export function mixin<T extends CanMixinFrom<M>, M extends {}, Args extends any[]>(target: T, rhs: abstract new (...args: Args) => M, ...args: Args): asserts target is MixedIn<T, M> {
+export function mixin<T extends CanMixinFrom<M>, M extends object, Args extends any[]>(target: T, rhs: abstract new (...args: Args) => M, ...args: Args): asserts target is MixedIn<T, M> {
     mixinObject(target, new class extends rhs { }(...args))
 }
 
-export function asMixin<T extends CanMixinFrom<M>, M extends {}, Args extends any[]>(target: T, rhs: abstract new (...args: Args) => M, ...args: Args): MixedIn<T, M> {
+export function asMixin<T extends CanMixinFrom<M>, M extends object, Args extends any[]>(target: T, rhs: abstract new (...args: Args) => M, ...args: Args): MixedIn<T, M> {
     mixin(target, rhs, ...args)
     return target
 }
@@ -87,7 +87,10 @@ export function nameFunction<F extends (...any: any[]) => any>(f: F, name: strin
         try {
             Object.defineProperty(f, 'name', { value: name })
             return f
-        } catch { }
+        } catch { /* ignore */ }
     }
     return { [name]: ((...args) => f(...args)) as F }[name]
 }
+
+/* eslint */
+export type Extending<_Sup, Sub> = Sub

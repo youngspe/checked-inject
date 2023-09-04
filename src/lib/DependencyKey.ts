@@ -1,9 +1,9 @@
 import { HasComputedKeySymbol } from './ComputedKey'
 import { Container } from './Container'
-import { PrivateConstruct } from './_internal'
+import { Class, PrivateConstruct } from './_internal'
 import { BaseTypeKey, HasTypeKeySymbol, TypeKey } from './TypeKey'
 import { InjectableClass } from './InjectableClass'
-import { ClassDep, Dependency, IsSync } from './Dependency'
+import { ClassDep, IsSync } from './Dependency'
 import { Merge } from './ProvideGraph'
 
 export type ResourceKey<T = any> = TypeKey<T> | InjectableClass<T>
@@ -14,12 +14,12 @@ interface OnlyObject<out T = unknown> {
 interface OnlyObjectKey extends OnlyObject<DependencyKey> { }
 
 /** @ignore An object representing a structured set of type keys to produce type `T`. */
-export type ObjectKey<T, D extends Dependency, Sync extends Dependency = any> = T extends OnlyObject ? OnlyObjectKey & {
+export type ObjectKey<T, D, Sync = any> = T extends OnlyObject ? OnlyObjectKey & {
     readonly [K in keyof T]: DependencyKey.Of<T[K], D, Sync>
 } : never
 
 /** @ignore An array representing a structured set of type keys to produce type `T`. */
-export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
+export type ArrayKey<T, D, Sync = any> =
     T extends readonly [infer A, ...infer B] ? [DependencyKey.Of<A, D, Sync>, ...ArrayKey<B, D, Sync>] :
     T extends readonly [] ? [] :
     T extends readonly any[] ? DependencyKey[] & {
@@ -28,11 +28,11 @@ export type ArrayKey<T, D extends Dependency, Sync extends Dependency = any> =
     never
 
 /** @ignore A structured set of type keys to produce type `T`. */
-export type StructuredKey<T, D extends Dependency = any, Sync extends Dependency = any> =
+export type StructuredKey<T, D = any, Sync = any> =
     | ObjectKey<T, D, Sync>
     | ArrayKey<T, D, Sync>
 /** @ignore */
-export type SimpleKey<T, D extends Dependency = any, Sync extends Dependency = any> =
+export type SimpleKey<T, D = any, Sync = any> =
     | BaseTypeKey<T>
     | HasComputedKeySymbol<T, D, Sync>
 
@@ -109,35 +109,47 @@ export abstract class Trace<K extends readonly any[] = readonly any[]> {
     constructor(_: never) { }
 }
 
-
 /** @ignore */
 export abstract class NotDistinct<in out K> {
     private _i!: K
 }
 
-export type ToBaseResource<K extends ResourceKey> = K extends InjectableClass ? (K & ClassDep<K>) : K
+type _ToBaseResource<K> = K extends InjectableClass ? ClassDep<K> : K
+export type ToBaseResource<K extends ResourceKey> = _ToBaseResource<K>
 
 /** @ignore */
-export type DepsOf<K extends DependencyKey> =
-    [DependencyKey] extends [K] ? UnableToResolve<K> :
+type _DepsOf<K> =
+    [DependencyKey] extends [K] ? UnableToResolve<['DepsOf', K]> :
     K extends Trace ? Trace<[]> :
-    K extends ResourceKey ? ToBaseResource<K> :
-    K extends DependencyKey.Of<infer _T, never> ? never :
-    K extends DependencyKey.Of<infer _T, infer D> ? D :
-    K extends readonly (infer X extends DependencyKey)[] ? DepsOf<X> :
-    K extends OnlyObject<infer X extends DependencyKey> ? DepsOf<X> :
-    UnableToResolve<K>
+    K extends BaseTypeKey | PrivateConstruct ? _ToBaseResource<K> :
+    K extends HasComputedKeySymbol<infer _T, never, any> ? never :
+    K extends HasComputedKeySymbol<infer _T, infer D, any> ? D :
+    K extends readonly never[] ? never :
+    K extends readonly (infer X)[] ? _DepsOf<X> :
+    K extends OnlyObject<never> ? never :
+    K extends OnlyObject<infer X> ? _DepsOf<X> :
+    K extends (undefined | null | void) ? never :
+    UnableToResolve<['DepsOf', K]>
 
 /** @ignore */
-export type IsSyncDepsOf<K extends DependencyKey> =
-    [DependencyKey] extends [K] ? UnableToResolve<K> :
-    K extends Trace ? Trace<[]> :
-    K extends ResourceKey ? IsSync<ToBaseResource<K>> :
-    K extends DependencyKey.Of<infer _T, any, never> ? never :
-    K extends DependencyKey.Of<infer _T, any, infer D> ? D :
-    K extends readonly (infer X extends DependencyKey)[] ? IsSyncDepsOf<X> :
-    K extends OnlyObject<infer X extends DependencyKey> ? IsSyncDepsOf<X> :
-    UnableToResolveIsSync<K>
+export type DepsOf<K extends DependencyKey> = _DepsOf<K>
+
+/** @ignore */
+type _IsSyncDepsOf<K> =
+    [DependencyKey] extends [K] ? UnableToResolveIsSync<['IsSyncDepsOf', K]> :
+    K extends Trace ? never :
+    K extends BaseTypeKey | PrivateConstruct ? IsSync<_ToBaseResource<K>> :
+    K extends HasComputedKeySymbol<infer _T, any, never> ? never :
+    K extends HasComputedKeySymbol<infer _T, any, infer D> ? D :
+    K extends readonly never[] ? never :
+    K extends readonly (infer X)[] ? _IsSyncDepsOf<X> :
+    K extends OnlyObject<never> ? never :
+    K extends OnlyObject<infer X> ? _IsSyncDepsOf<X> :
+    K extends (undefined | null | void) ? never :
+    UnableToResolveIsSync<['IsSyncDepsOf', K]>
+
+/** @ignore */
+export type IsSyncDepsOf<K extends DependencyKey> = _IsSyncDepsOf<K>
 
 /**
  * Specifies which dependencies to request from a {@link Container}.
@@ -320,9 +332,9 @@ export type DependencyKey =
  */
 export namespace DependencyKey {
     /** A dependency key that, when requested, resolves to a value of type `T`. */
-    export type Of<T, D extends Dependency = any, Sync extends Dependency = any> =
+    export type Of<T, D = any, Sync = any> =
         | SimpleKey<T, D, Sync>
-        | InjectableClass<T>
+        | Class<T>
         | StructuredKey<T, D, Sync>
-        | (T extends (null | undefined | void | Trace) ? T : never)
+        | (T extends (null | undefined | void) ? T : never)
 }

@@ -3,12 +3,12 @@ import { BaseComputedKey, ComputedKey } from './ComputedKey'
 import { NonEmptyScopeList, Scope, ScopeList, Singleton } from './Scope'
 import { Inject } from './Inject'
 import { InjectableClass } from './InjectableClass'
-import { BaseResource, Dependency, IsSync, NotSync, RequireSync, ShouldDetectCycles } from './Dependency'
-import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey, ToBaseResource, UnableToResolve, Trace } from './DependencyKey'
+import { Dependency, IsSync, NotSync, RequireSync } from './Dependency'
+import { Target, DepsOf, DependencyKey, IsSyncDepsOf, ResourceKey, ToBaseResource } from './DependencyKey'
 import { Initializer, nameFunction } from './_internal'
 import { Module } from './Module'
 import { ChildGraph, DepPair, FlatGraph, Merge, Provide, ProvideGraph, WithScope } from './ProvideGraph'
-import { CanRequest, RequestFailed, unresolved } from './CanRequest'
+import { CanRequest, RequestFailed, unresolved, SimplifyDep } from './CanRequest'
 import { InjectError, TypeKeyNotProvidedError, ScopeUnavailableError, DependencyFailedError, InjectPropertyError, DependencyNotSyncError, DependencyCycleError } from './InjectError'
 
 // This entry has a dependency key and an initializer function
@@ -50,13 +50,13 @@ type CombinedScope<K, S extends Scope> = ExcludeUnspecifiedScope<
     | (K extends WithScope<infer A> ? A : never)
 >
 
-type PairForProvide<K extends ResourceKey, D extends Dependency, S extends Scope> =
+type PairForProvide<K extends ResourceKey, D, S extends Scope> =
     [CombinedScope<K, S>] extends [infer Scp extends Scope] ? (
         & DepPair<ToBaseResource<K>, D | Scp>
         & ([Scp] extends [never] ? unknown : WithScope<Scp>)
     ) : never
 
-type PairForProvideIsSync<K extends ResourceKey, Sync extends Dependency, S extends Scope> =
+type PairForProvideIsSync<K extends ResourceKey, Sync, S extends Scope> =
     [CombinedScope<K, S>] extends [infer Scp extends Scope] ? (
         [Dependency] extends [Sync] ? never :
         & DepPair<IsSync<ToBaseResource<K>>, Sync>
@@ -114,8 +114,8 @@ export class Container<P extends Container.Graph> {
      * @group Static Methods
      */
     static create<S extends Scope = never>(options: { scope?: ScopeList<S> } = {}): Container<Container.DefaultGraph<S>> {
-        let { scope } = options
-        let scopeWithSingleton = [Singleton, ...ScopeList.flatten(scope)]
+        const { scope } = options
+        const scopeWithSingleton = [Singleton, ...ScopeList.flatten(scope)]
         const newOptions: { scope: Scope[] } = { scope: scopeWithSingleton }
         return new Container(newOptions)
     }
@@ -272,7 +272,7 @@ export class Container<P extends Container.Graph> {
                     if ('instance' in entry.value) return entry.value.instance
 
                     // Assuming entry won't change from 'instance' to 'binding', init should be defined at this point
-                    let output = init!()
+                    const output = init!()
                     init = null
                     entry.value = { instance: output }
                     if ('then' in output) { output.then(ref => { entry.value = { instance: ref } }) }
@@ -320,14 +320,14 @@ export class Container<P extends Container.Graph> {
 
         type _K = NonNullable<K>
         type _T = { [X in keyof _K]: Target<_K[X], P> }
-        let _deps = deps as { [X in keyof _K]: _K[X] & DependencyKey.Of<_T[X]> }
+        const _deps = deps as { [X in keyof _K]: _K[X] & DependencyKey.Of<_T[X]> }
 
         const providers: { [X in keyof _K]?: Initializer<Target<_K[X], P>> } = arrayLength == null ? {} : new Array(arrayLength) as any
 
         let failed = false
         const errors: { [X in keyof _K]?: InjectError } = {}
 
-        for (let prop in _deps) {
+        for (const prop in _deps) {
             const provider = this._getProvider(_deps[prop])
             if (provider instanceof InjectError) {
                 failed = true
@@ -346,20 +346,20 @@ export class Container<P extends Container.Graph> {
             const out: Partial<_T> = arrayLength == null ? {} : new Array(arrayLength) as unknown as Partial<_T>
             let allSync = true
 
-            for (let prop in providers) {
+            for (const prop in providers) {
                 const ref = refs[prop] = providers[prop]!()
                 allSync = allSync && 'value' in ref
             }
 
             if (allSync) {
-                for (let prop in refs) {
+                for (const prop in refs) {
                     out[prop] = (refs[prop] as Initializer.Ref<_T[keyof _T]>).value
                 }
                 return { value: out as T }
             }
 
             return (async () => {
-                for (let prop in refs) {
+                for (const prop in refs) {
                     out[prop] = (await refs[prop])!.value
                 }
                 return { value: out as T }
@@ -371,8 +371,8 @@ export class Container<P extends Container.Graph> {
     private _provide<
         K extends ResourceKey,
         SrcK extends DependencyKey = never,
-        D extends Dependency = DepsOf<SrcK>,
-        Sync extends Dependency = RequireSync<D>,
+        D = DepsOf<SrcK>,
+        Sync = RequireSync<D>,
         S extends Scope = never,
     >(
         sync: boolean,
@@ -441,7 +441,7 @@ export class Container<P extends Container.Graph> {
             }
         }
 
-        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
+        const _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
         this._setKeyProvider(_key, entry)
         return this
     }
@@ -501,8 +501,8 @@ export class Container<P extends Container.Graph> {
     provide<
         K extends ResourceKey,
         SrcK extends DependencyKey = never,
-        D extends Dependency = DepsOf<SrcK>,
-        Sync extends Dependency = RequireSync<D>,
+        D = DepsOf<SrcK>,
+        Sync = RequireSync<D>,
         S extends Scope = never,
     >(
         key: K,
@@ -558,7 +558,7 @@ export class Container<P extends Container.Graph> {
         T,
         K extends ResourceKey<Awaited<T>>,
         SrcK extends DependencyKey = never,
-        D extends Dependency = DepsOf<SrcK>,
+        D = DepsOf<SrcK>,
         S extends Scope = never,
     >(
         key: K,
@@ -587,7 +587,7 @@ export class Container<P extends Container.Graph> {
         Provide<P, DepPair<IsSync<ToBaseResource<K>>, never> | DepPair<ToBaseResource<K>, never>>
     > {
         type T = Target<K>
-        let _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
+        const _key: TypeKey<T> = TypeKey.isTypeKey(key) ? key : this._getClassTypeKey(key)
         this._setKeyProvider(_key, { value: { instance: { value: instance } }, isLocal: false })
         return this as any
     }
@@ -628,11 +628,9 @@ export class Container<P extends Container.Graph> {
         return this as any
     }
 
-    /**
-     * Improves the diagnostics for when a dependency cycle occurs, potentially at the cost of compile-time performance
-     */
-    detectCycles(): Container<Provide<P, DepPair<ShouldDetectCycles, never>>> {
-        return this as any
+    /** @deprecated */
+    detectCycles(): this {
+        return this
     }
 
     /**
@@ -807,7 +805,7 @@ export class Container<P extends Container.Graph> {
      * @group Provide Methods
      */
     apply<M extends Module.Item[]>(...modules: M): Container<Merge<P, Module.Provides<M>>> {
-        for (let mod of modules) {
+        for (const mod of modules) {
             if (mod instanceof Array) {
                 mod.forEach(m => this.apply(m as any))
             } else if (typeof mod == 'function') {
@@ -968,8 +966,8 @@ export namespace Container {
         provide<
             K extends ResourceKey,
             SrcK extends DependencyKey = never,
-            D extends Dependency = DepsOf<SrcK>,
-            Sync extends Dependency = RequireSync<D>,
+            D = DepsOf<SrcK>,
+            Sync = RequireSync<D>,
             S extends Scope = never,
         >(
             key: K,
@@ -994,7 +992,7 @@ export namespace Container {
             T,
             K extends ResourceKey<Awaited<T>>,
             SrcK extends DependencyKey = never,
-            D extends Dependency = DepsOf<SrcK>,
+            D = DepsOf<SrcK>,
             S extends Scope = never,
         >(
             key: K,
@@ -1040,43 +1038,24 @@ export namespace Container {
          */
         apply<M extends Module.Item[]>(...modules: M): Builder<Merge<P, Module.Provides<M>>>
 
-        /**
-         * {@inheritDoc Container.detectCycles}
-         * @see {@link Container.detectCycles}
-         */
-        detectCycles(): Builder<Provide<P, DepPair<ShouldDetectCycles, never>>>
+        /** @deprecated */
+        detectCycles(): this
     }
 }
 
-interface Invariant<in out T> { }
-
-
-
-/**
- * @ignore
- * @internal
- */
-export interface _AssertContainerOptions {
-    readonly trace?: true | false
-}
+declare abstract class Invariant<in out T> { private _inv: T }
 
 function _assertContainer1<
     G extends Container.Graph,
-    O extends _AssertContainerOptions = {},
 >(
     ct: Container<G> | Module<G>,
-    options?: O,
 ) {
-    type X =
-        | (O extends { trace: true } ? Trace : never)
     return {
         [unresolved]: undefined as void,
         async canRequest<K extends DependencyKey>(
             this: (
-                & CanRequest<G, K | X>
-                & CanRequest<G, K | X, never>
-                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X>
-                & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>
+                & CanRequest<G, K>
+                & CanRequest<G, K, never>
             ),
             key: K
         ) {
@@ -1085,44 +1064,42 @@ function _assertContainer1<
         },
 
         async cannotRequestSync<K extends DependencyKey>(
-            this: CanRequest<G, K | X, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>,
+            this: CanRequest<G, K, never>,
             key: K,
-            _because?: Invariant<CanRequest<G, K | X> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K>>,
+            _because?: Invariant<CanRequest<G, K>>,
         ) {
             try {
                 ct.requestUnchecked(key)
                 throw new Error('expected request to fail')
-            } catch { }
+            } catch { /* failed as expected */ }
             await ct.requestAsyncUnchecked(key)
         },
         async cannotRequest<K extends DependencyKey>(
             key: K,
-            _because?: Invariant<CanRequest<G, K | X, never> & CanRequest<Provide<G, DepPair<ShouldDetectCycles, never>>, K | X, never>>,
+            _because?: Invariant<CanRequest<G, K, never>>,
         ) {
             try {
                 await ct.requestAsyncUnchecked(key)
                 throw new Error('expected request to fail')
-            } catch { }
+            } catch { /* failed as expected */ }
 
             try {
                 ct.requestUnchecked(key)
                 throw new Error('expected requestAsync to fail')
-            } catch { }
+            } catch { /* failed as expected */ }
         },
     }
 }
 
 export function _assertContainer<
     G extends Container.Graph,
-    O extends _AssertContainerOptions = {},
->(ct: Module<G>, options?: O): ReturnType<
-    typeof _assertContainer1<Merge<Container.DefaultGraph, G>, O>
+>(ct: Module<G>): ReturnType<
+    typeof _assertContainer1<Merge<Container.DefaultGraph, G>>
 >
 
 export function _assertContainer<
     G extends Container.Graph,
-    O extends _AssertContainerOptions = {},
->(ct: Container<G>, options?: O): ReturnType<typeof _assertContainer1<G, O>>
+>(ct: Container<G>): ReturnType<typeof _assertContainer1<G>>
 
 /**
  * @ignore
@@ -1130,19 +1107,17 @@ export function _assertContainer<
  */
 export function _assertContainer<
     G extends Container.Graph,
-    O extends _AssertContainerOptions = {},
 >(
     ct: Container<G> | Module<G>,
-    options?: O,
 ) {
-    return _assertContainer1(ct, options)
+    return _assertContainer1(ct)
 }
 
 /**
  * @ignore
  * @internal
  */
-export function _because<K, Sync extends ResourceKey = never>(): Invariant<RequestFailed<
-    | K
-    | (Sync extends infer S extends ResourceKey ? NotSync<ToBaseResource<S>> : never)
+export function _because<K, Sync = never>(): Invariant<RequestFailed<
+    | SimplifyDep<K>
+    | (Sync extends any ? NotSync<SimplifyDep<Sync>> : never)
 >> | undefined { return undefined }

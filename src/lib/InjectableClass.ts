@@ -1,7 +1,6 @@
 import { ComputedKey } from './ComputedKey'
 import { ScopeList } from './Scope'
 import { Class, asMixin } from './_internal'
-import { Dependency } from './Dependency'
 import { AbstractKey } from './AbstractKey'
 
 /**
@@ -44,7 +43,7 @@ export interface ClassWithoutDefault extends InjectableClass<any> {
     readonly inject?: never
 }
 
-export interface ClassWithDefault<T, D extends Dependency, Sync extends Dependency> extends InjectableClass<T> {
+export interface ClassWithDefault<T, D, Sync> extends InjectableClass<T> {
     readonly inject: ComputedKey<T, any, D, Sync> | (() => ComputedKey<T, any, D, Sync>)
 }
 
