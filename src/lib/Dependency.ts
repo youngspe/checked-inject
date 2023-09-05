@@ -11,6 +11,8 @@ export type BaseResource = BaseTypeKey | ClassDep
 
 declare abstract class _ClassDep<in out D extends InjectableClass> {
     private _: D
+    /** @ignore make sure this type is invariant over D */
+    _classDep(x: D): D
     readonly scope: Extract<D['scope'], Scope>
     readonly inject: Extract<D['inject'], ComputedKey | (() => ComputedKey)>
 }
