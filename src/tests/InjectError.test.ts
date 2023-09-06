@@ -1,6 +1,6 @@
-import { Container, Errors, Inject, Module, Scope, Singleton, TypeKey, FactoryKey, Injectable, LazyKey } from '../lib'
-import { _assertContainer, _because } from '../lib/Container'
-import { CycleDetected } from '../lib/Dependency'
+import { Container, Errors, Inject, Module, Scope, Singleton, TypeKey, FactoryKey, Injectable, LazyKey } from '@lib'
+import { _assertContainer, _because } from '@lib/Container'
+import { CycleDetected } from '@lib/Dependency'
 
 class NumberKey extends TypeKey<number>() { private _: any }
 class StringKey extends TypeKey<string>() { private _: any }

@@ -1,5 +1,5 @@
-import { FactoryKey, Inject, Injectable, LazyKey, Module, Scope, Singleton, Target, TypeKey } from '../lib'
-import { _assertContainer, _because } from '../lib/Container'
+import { FactoryKey, Inject, Injectable, LazyKey, Module, Scope, Singleton, Target, TypeKey } from '@lib'
+import { _assertContainer, _because } from '@lib/Container'
 import { sleep } from './utils'
 
 namespace Keys {

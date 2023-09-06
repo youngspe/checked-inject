@@ -1,4 +1,4 @@
-import { Dependency, IsSync, FailedDependency, Missing, Sub, In, WrapIn, BaseResource, SimpleDependency, OkDependency, InItem, SubItem, FailOn, ClassDep, NotSync, CycleDetected, ToFailable, CyclicItem, Cyclic, ToSkippable, Skippable, Failable, FailOn_Skippable, WrapFailOn, GetBaseResource } from './Dependency'
+import { Dependency, IsSync, FailedDependency, Missing, Sub, In, WrapIn, BaseResource, SimpleDependency, OkDependency, InItem, SubItem, FailOn, ClassDep, NotSync, CycleDetected, ToFailable, CyclicItem, Cyclic, ToSkippable, Skippable, Failable, FailOn_Skippable, WrapFailOn, GetBaseResource, FailOn_Dep } from './Dependency'
 import { DependencyKey, DepsOf, NotDistinct, IsSyncDepsOf, UnableToResolve, Trace } from './DependencyKey'
 import { ChildGraph, DepPair, GraphPairs, Merge, ProvideGraph, WithScope } from './ProvideGraph'
 import { Scope } from './Scope'
@@ -190,7 +190,7 @@ type DepsForKeyStep<
     Prev extends Skippable,
     KAll = K,
 > =
-    K extends FailOn<infer D, infer Fl> ? DepsForKeyFailOn<G, D, Fl, Prev, KAll> :
+    K extends FailOn_Dep<infer D, infer Fl> ? DepsForKeyFailOn<G, D, Fl, Prev, KAll> :
     ToSkippable<K> extends Prev ? never :
     K extends Cyclic<infer D> ? DepsForKeyCyclicItem<G, D> :
     K extends CyclicItem ? WrapFailOn<DepsForKeyCyclicItem<G, K>, ToFailable<K>> :
@@ -244,7 +244,7 @@ type ValidateDep_CyclicItem<D extends CyclicItem, _D> =
 type ValidateDep<D> =
     D extends Scope ? ValidateDep_SubItem<D, D> :
     D extends CyclicItem ? ValidateDep_CyclicItem<D, D> :
-    D extends FailOn<infer D2, any> ? ValidateDep_CyclicItem<D2, D> :
+    D extends FailOn_Dep<infer D2, any> ? ValidateDep_CyclicItem<D2, D> :
     D extends Cyclic<infer D2> ? ValidateDep_CyclicItem<D2, D> :
     D
 
@@ -253,11 +253,11 @@ type TransitiveFailOn<K, Fl extends Failable> =
     K extends FailOn_Skippable<Fl, infer Fl2> ? Fl2 :
     never
 
-type CombineFailOn<K, _K = K, _D extends CyclicItem = _K extends FailOn<infer D, any> ? D : never> =
-    | Exclude<K, FailOn<any, any>>
+type CombineFailOn<K, _K = K, _D extends CyclicItem = _K extends FailOn_Dep<infer D, any> ? D : never> =
+    | Exclude<K, FailOn_Dep<any, any>>
     | (_D extends any ? FailOn<
         _D,
-        _K extends FailOn<_D, infer Fl> ? Fl : never
+        _K extends FailOn_Dep<_D, infer Fl> ? Fl : never
     > : never)
 
 type SimplifyDep_BaseResource<D> =
@@ -282,7 +282,7 @@ type SimplifyDep_CyclicItem<D> =
 type SimplifyDep_Ok<D extends OkDependency> =
     D extends CyclicItem ? SimplifyDep_CyclicItem<D> :
     D extends Cyclic<infer D2> ? Cyclic<SimplifyDep_CyclicItem<D2>> :
-    D extends FailOn<infer D2, infer Fl> ? FailOn<
+    D extends FailOn_Dep<infer D2, infer Fl> ? FailOn<
         SimplifyDep_CyclicItem<D2>,
         SimplifyDep_CyclicItem<Fl>
     > :

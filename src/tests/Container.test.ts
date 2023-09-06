@@ -1,5 +1,5 @@
-import { AsyncFactoryKey, Container, FactoryKey, Inject, LazyKey, Module, Scope, Singleton, TypeKey } from '../lib'
-import { _assertContainer, _because } from '../lib/Container'
+import { AsyncFactoryKey, Container, FactoryKey, Inject, LazyKey, Module, Scope, Singleton, TypeKey } from '@lib'
+import { _assertContainer, _because } from '@lib/Container'
 
 class NumberKey extends TypeKey<number>() { private _: any }
 class StringKey extends TypeKey<string>() { private _: any }

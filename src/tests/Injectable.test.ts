@@ -1,4 +1,4 @@
-import { Inject, Injectable, Module, TypeKey } from '../lib'
+import { Inject, Injectable, Module, TypeKey } from '@lib'
 import { sleep } from './utils'
 
 const Keys = {

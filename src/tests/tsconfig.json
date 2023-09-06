@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "noEmit": true,
+        // "baseUrl": "..",
+        // "paths": {
+        //     "@lib": [
+        //         "../dist/lib"
+        //     ],
+        //     "@lib/*": [
+        //         "../dist/lib/*"
+        //     ],
+        // },
+    },
+    "extends": "../../tsconfig.jest.json",
+}

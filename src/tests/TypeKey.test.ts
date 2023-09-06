@@ -1,4 +1,4 @@
-import { Target, TypeKey } from '../lib'
+import { Target, TypeKey } from '@lib'
 import { Equal, StaticAssert } from './utils'
 
 describe(TypeKey, () => {
